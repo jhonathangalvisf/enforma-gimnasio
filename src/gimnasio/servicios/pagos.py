@@ -196,6 +196,9 @@ class DatosRecibo:
     anulado: bool
     motivo_anulacion: str
     lineas_extra: list[str] = field(default_factory=list)
+    # Pagos de membresía: período que cubre (la nueva vigencia del cliente).
+    vigencia_desde: date | None = None
+    vigencia_hasta: date | None = None
 
 
 def _motivo(texto: str, que: str) -> str:
@@ -579,7 +582,7 @@ class ServicioPagos:
             usuario = sesion.get(Usuario, pago.usuario_id)
             obtener = lambda clave: self._configuracion.obtener(clave, sesion)  # noqa: E731
             detalle = CONCEPTOS[pago.concepto]
-            precio = saldo = None
+            precio = saldo = vigencia_desde = vigencia_hasta = None
             if pago.casillero_asignacion_id is not None:
                 asignacion = sesion.get(CasilleroAsignacion, pago.casillero_asignacion_id)
                 casillero = sesion.get(Casillero, asignacion.casillero_id)
@@ -590,6 +593,7 @@ class ServicioPagos:
                 detalle = (f"Membresía {plan.nombre} del {formato_fecha(membresia.fecha_inicio)} "
                            f"al {formato_fecha(membresia.fecha_fin)}")
                 precio = membresia.precio_pactado
+                vigencia_desde, vigencia_hasta = membresia.fecha_inicio, membresia.fecha_fin
                 # Saldo justo después de este pago: lo pagado hasta este recibo inclusive.
                 pagado = sesion.scalar(
                     select(func.coalesce(func.sum(Pago.monto), 0)).where(
@@ -614,6 +618,7 @@ class ServicioPagos:
                 monto=pago.monto, precio_membresia=precio, saldo_despues=saldo,
                 usuario=usuario.nombre_completo if usuario else "—",
                 anulado=pago.anulado, motivo_anulacion=pago.motivo_anulacion or "",
+                vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta,
             )
 
     def generar_recibo(
