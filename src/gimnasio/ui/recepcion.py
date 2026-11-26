@@ -14,7 +14,6 @@ from __future__ import annotations
 import dataclasses
 import sys
 from collections.abc import Callable
-from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from gimnasio.formato import fecha, fecha_hora_local
+from gimnasio.rutas import recurso
 from gimnasio.servicios.asistencia import (
     AMARILLO, DUPLICADO_BLOQUEADO, DUPLICADO_CONFIRMAR, RECHAZADO, RESULTADOS, ROJO, VERDE,
     ResultadoIngreso, TarjetaIngreso,
@@ -33,7 +33,7 @@ from gimnasio.servicios.permisos import Permiso, UsuarioActual
 from gimnasio.ui.comunes import boton, celda, etiqueta, mostrar_error, tabla
 from gimnasio.ui.dialogos import _DialogoBase, campo_clave
 
-RUTA_SONIDO = Path(__file__).resolve().parent.parent / "recursos" / "alerta.wav"
+RUTA_SONIDO = recurso("alerta.wav")
 NEUTRO = "neutro"
 COLORES = {  # fondo, borde y texto de la tarjeta
     VERDE: ("#e7f5ea", "#1e7b34", "#14532d"),

@@ -30,31 +30,16 @@ from gimnasio import config as cfg  # noqa: E402
 from gimnasio.backup.cifrado import ErrorBackup  # noqa: E402
 from gimnasio.backup.protector import AlmacenClave  # noqa: E402
 from gimnasio.formato import fecha_hora_local, tamano_archivo  # noqa: E402
+from gimnasio.diagnostico import buscar_ultima_copia  # noqa: E402
+from gimnasio.diagnostico import destino_configurado as _destino_configurado  # noqa: E402
 from gimnasio.servicios.backups import (  # noqa: E402
-    CARPETA_LOCAL, TIPO_AUTOMATICO, TIPO_MANUAL, abrir_y_revisar, listar_carpeta,
-    revisiones_conocidas,
+    CARPETA_LOCAL, abrir_y_revisar, revisiones_conocidas,
 )
 
 
-def destino_configurado(carpeta_datos: Path) -> Path | None:
-    """Lee `backup_destino` de la base sin abrir la aplicación (solo lectura)."""
-    base = carpeta_datos / "enforma.db"
-    if not base.is_file():
-        return None
-    try:
-        with sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True) as c:
-            fila = c.execute("SELECT valor FROM config WHERE clave = 'backup_destino'").fetchone()
-    except sqlite3.Error:
-        return None
-    return Path(fila[0]) if fila and fila[0] else None
-
-
-def buscar_ultima(carpetas: list[Path]):
-    copias = []
-    for carpeta in carpetas:
-        copias += [c for c in listar_carpeta(carpeta, str(carpeta))
-                   if c.legible and c.tipo in (TIPO_AUTOMATICO, TIPO_MANUAL)]
-    return max(copias, key=lambda c: c.creado) if copias else None
+# Compartidas con el diagnóstico de la instalación (gimnasio/diagnostico.py).
+destino_configurado = _destino_configurado
+buscar_ultima = buscar_ultima_copia
 
 
 def verificar(ruta: Path, clave: str) -> bool:

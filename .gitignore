@@ -9,6 +9,8 @@ __pycache__/
 build/
 dist/
 *.spec
+!empaquetado/enforma.spec
+empaquetado/salida/
 
 # Datos: nunca se suben bases de datos, backups ni fotos de clientes
 *.db

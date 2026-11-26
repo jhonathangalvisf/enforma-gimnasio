@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from gimnasio import config as cfg
+from gimnasio.rutas import recurso
 from gimnasio.modelos import Config
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.errores import ErrorValidacion
@@ -95,6 +96,7 @@ PARAMETROS: tuple[Parametro, ...] = (
               grupo="Recibos"),
 )
 POR_CLAVE = {p.clave: p for p in PARAMETROS}
+LOGO_POR_DEFECTO = "logo_enforma.png"  # en gimnasio/recursos
 CLAVE_LOGO = "gimnasio_logo"  # nombre del archivo dentro de la carpeta de datos
 EXTENSIONES_LOGO = {".png", ".jpg", ".jpeg"}
 
@@ -149,9 +151,14 @@ class ServicioConfiguracion:
             return {p.clave: self.obtener(p.clave, sesion) for p in PARAMETROS}
 
     def ruta_logo(self) -> Path | None:
+        """Logo de los recibos. Si nunca se eligió uno, se usa el de Enforma que viene con
+        el programa; si el administrador lo quitó, no hay logo."""
         with self._fabrica() as sesion:
             fila = sesion.get(Config, CLAVE_LOGO)
-        if not fila or not fila.valor:
+        if fila is None:
+            por_defecto = recurso(LOGO_POR_DEFECTO)
+            return por_defecto if por_defecto.is_file() else None
+        if not fila.valor:
             return None
         ruta = self._carpeta_datos() / fila.valor
         return ruta if ruta.exists() else None
