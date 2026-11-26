@@ -31,6 +31,13 @@ ACCIONES = {
     "clave_restablecida": "Contraseña restablecida por el administrador",
     "clave_cambiada": "Contraseña cambiada por el usuario",
     "configuracion_cambiada": "Configuración cambiada",
+    "cliente_registrado": "Cliente registrado",
+    "cliente_modificado": "Cliente modificado",
+    "cliente_foto_cambiada": "Foto de cliente cambiada",
+    "cliente_inactivado": "Cliente inactivado",
+    "cliente_activado": "Cliente activado",
+    "casillero_liberado": "Casillero liberado",
+    "clientes_exportados": "Lista de clientes exportada",
 }
 
 _CAMPOS_PROHIBIDOS = {"clave", "hash_clave", "contrasena", "password"}

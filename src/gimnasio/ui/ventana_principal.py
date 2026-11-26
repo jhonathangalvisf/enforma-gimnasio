@@ -15,7 +15,10 @@ from PySide6.QtWidgets import (
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
 from gimnasio.servicios.sesion import ControlInactividad
-from gimnasio.ui.comunes import boton, etiqueta
+from gimnasio.servicios.errores import ErrorNegocio
+from gimnasio.ui.cliente_ficha import DialogoFicha
+from gimnasio.ui.clientes import DialogoElegirCliente, PantallaClientes
+from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
 from gimnasio.ui.configuracion import PantallaConfiguracion
 from gimnasio.ui.dialogos import DialogoCambiarClave
 
@@ -35,7 +38,7 @@ MODULOS: tuple[Modulo, ...] = (
     Modulo("recepcion", "Recepción", Permiso.REGISTRAR_ASISTENCIA,
            "Ingreso de clientes con el código o el lector: tarjeta verde, amarilla o roja.", 4),
     Modulo("clientes", "Clientes", Permiso.VER_CLIENTES,
-           "Registro, consulta y modificación de clientes con búsqueda instantánea.", 2),
+           "Registro, consulta y modificación de clientes con búsqueda instantánea."),
     Modulo("asistencia", "Asistencia", Permiso.REGISTRAR_ASISTENCIA,
            "Consulta de asistencias por día y por cliente.", 4),
     Modulo("casilleros", "Casilleros", Permiso.ASIGNAR_CASILLERO,
@@ -115,6 +118,8 @@ class VentanaPrincipal(QMainWindow):
         capa.addLayout(cuerpo, 1)
         self.setCentralWidget(central)
 
+        self.pantalla_clientes: PantallaClientes | None = None
+        self.ficha_abierta: DialogoFicha | None = None
         self._indices: dict[str, int] = {}
         for modulo in MODULOS:
             if not actual.puede(modulo.permiso):
@@ -149,7 +154,7 @@ class VentanaPrincipal(QMainWindow):
         capa.addSpacing(24)
         self.busqueda = QLineEdit()
         self.busqueda.setObjectName("busquedaGlobal")
-        self.busqueda.setPlaceholderText("Buscar cliente por código, nombre, documento o teléfono  (Ctrl+K)")
+        self.busqueda.setPlaceholderText("Buscar cliente por código, nombre, documento, teléfono o correo  (Ctrl+K)")
         self.busqueda.returnPressed.connect(self.buscar)
         capa.addWidget(self.busqueda, 1)
         capa.addSpacing(24)
@@ -169,6 +174,10 @@ class VentanaPrincipal(QMainWindow):
     def _crear_pantalla(self, modulo: Modulo) -> QWidget:
         if modulo.clave == "configuracion":
             return PantallaConfiguracion(self._servicios, self.actual)
+        if modulo.clave == "clientes":
+            self.pantalla_clientes = PantallaClientes(self._servicios, self.actual)
+            self.pantalla_clientes.abrir_ficha.connect(self.abrir_ficha)
+            return self.pantalla_clientes
         return PantallaProximamente(modulo)
 
     # --- acciones -----------------------------------------------------------
@@ -187,12 +196,40 @@ class VentanaPrincipal(QMainWindow):
         self.busqueda.setFocus()
         self.busqueda.selectAll()
 
-    def buscar(self) -> None:
+    def buscar(self) -> int | None:
+        """Búsqueda global: un resultado abre la ficha; varios muestran la lista."""
         texto = self.busqueda.text().strip()
-        if texto:
-            self.statusBar().showMessage(
-                "La búsqueda de clientes se habilita en la Fase 2.", 4000
-            )
+        if not texto:
+            return None
+        try:
+            filas = self._servicios.clientes.buscar_rapido(self.actual, texto)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return None
+        if not filas:
+            self.statusBar().showMessage(f"No se encontró ningún cliente con «{texto}».", 5000)
+            return None
+        cliente_id = filas[0].id
+        if len(filas) > 1:
+            dialogo = DialogoElegirCliente(filas, texto, padre=self)
+            if not dialogo.exec():
+                return None
+            cliente_id = dialogo.cliente_id
+        self.busqueda.clear()
+        self.abrir_ficha(cliente_id)
+        return cliente_id
+
+    def abrir_ficha(self, cliente_id: int) -> None:
+        try:
+            dialogo = DialogoFicha(self._servicios, self.actual, cliente_id, padre=self)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return
+        self.ficha_abierta = dialogo
+        dialogo.exec()
+        self.ficha_abierta = None
+        if dialogo.cambio and getattr(self, "pantalla_clientes", None):
+            self.pantalla_clientes.actualizar()
 
     def cambiar_clave(self) -> None:
         dialogo = DialogoCambiarClave(self._servicios, self.actual, padre=self)

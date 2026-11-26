@@ -32,6 +32,7 @@ from sqlalchemy import Engine, func, insert, select  # noqa: E402
 from gimnasio.config import ZONA_HORARIA, url_base_datos  # noqa: E402
 from gimnasio.db.engine import crear_motor  # noqa: E402
 from gimnasio.db.migraciones import actualizar_esquema  # noqa: E402
+from gimnasio.modelos.clientes import texto_busqueda  # noqa: E402
 from gimnasio.modelos import (  # noqa: E402
     Alerta,
     Asistencia,
@@ -148,6 +149,7 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
             documento=doc,
             nombres=nombres,
             apellidos=apellidos,
+            busqueda=texto_busqueda(nombres, apellidos),
             sexo=sexo,
             fecha_nacimiento=fk.date_of_birth(minimum_age=14, maximum_age=75),
             direccion=fk.street_address(),
