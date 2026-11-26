@@ -26,6 +26,7 @@ from gimnasio.ui.casilleros import PantallaCasilleros
 from gimnasio.ui.invitados import PantallaInvitados
 from gimnasio.ui.pagos import PantallaPagos
 from gimnasio.ui.recepcion import PantallaRecepcion
+from gimnasio.ui.reportes import PantallaReportes
 
 INTERVALO_REVISION_MS = 15_000
 
@@ -53,7 +54,7 @@ MODULOS: tuple[Modulo, ...] = (
     Modulo("pagos", "Pagos", Permiso.REGISTRAR_PAGOS,
            "Membresías, pagos, recibos y cierre de caja."),
     Modulo("reportes", "Reportes", Permiso.REPORTES_BASICOS,
-           "Reportes con filtros, exportación a Excel y PDF.", 7),
+           "Reportes con filtros, exportación a Excel y PDF."),
     Modulo("configuracion", "Configuración", Permiso.CONFIGURACION,
            "Parámetros, usuarios, planes y auditoría."),
     Modulo("ayuda", "Ayuda", Permiso.AYUDA,
@@ -210,6 +211,9 @@ class VentanaPrincipal(QMainWindow):
         if modulo.clave == "invitados":
             self.pantalla_invitados = PantallaInvitados(self._servicios, self.actual)
             return self.pantalla_invitados
+        if modulo.clave == "reportes":
+            self.pantalla_reportes = PantallaReportes(self._servicios, self.actual)
+            return self.pantalla_reportes
         return PantallaProximamente(modulo)
 
     # --- acciones -----------------------------------------------------------

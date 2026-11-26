@@ -55,5 +55,6 @@ docs/
 - Medir búsquedas: `python scripts/medir_busqueda.py --db datos_prueba.db` (meta < 200 ms)
 - Medir Recepción y reportes de asistencia: `python scripts/medir_asistencia.py --db datos_prueba.db`
 - Medir invitados: `python scripts/medir_invitados.py --db datos_prueba.db`
+- Medir reportes: `python scripts/medir_reportes.py --db datos_prueba.db`
 - Nueva migración: `alembic revision --autogenerate -m "descripcion"` y revisar el archivo generado
 - Regenerar requirements.txt: `uv pip compile requirements.in --python-platform windows --python-version 3.12 -o requirements.txt`

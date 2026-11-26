@@ -36,6 +36,7 @@ from gimnasio.modelos.clientes import texto_busqueda  # noqa: E402
 from gimnasio.texto import normalizar  # noqa: E402
 from gimnasio.modelos import (  # noqa: E402
     Alerta,
+    Auditoria,
     Asistencia,
     Casillero,
     CasilleroAsignacion,
@@ -173,6 +174,15 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
         info_clientes.append((i, sexo, registro, estado))
     insertar(motor, Cliente, clientes)
     insertar(motor, Contacto, contactos)
+    # Inactivación en la auditoría (el reporte de bajas la lee de ahí).
+    insertar(motor, Auditoria, [
+        dict(fecha_hora=a_utc(max(registro, hoy - timedelta(days=rnd.randint(1, 300))),
+                              *hora_gimnasio(rnd)),
+             usuario_id=1, accion="cliente_inactivado", entidad="clientes", entidad_id=cid,
+             detalle_json='{"codigo": "%06d", "motivo": "%s"}' % (
+                 cid, rnd.choice(["Se mudó de ciudad", "Ya no asiste", "Solicitud del cliente"])))
+        for cid, _sexo, registro, estado in info_clientes if estado == "inactivo"
+    ])
 
     # --- Membresías y pagos -----------------------------------------------
     membresias, pagos = [], []
