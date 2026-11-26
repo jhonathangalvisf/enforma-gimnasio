@@ -23,6 +23,9 @@ class Invitado(Base):
     creado_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
     # Nombre en minúsculas y sin tildes, para buscar rápido. Se calcula al guardar.
     busqueda: Mapped[str] = mapped_column(String(160), default="", server_default="")
+    # Visitas del programa anterior sin fecha conocida (importación, migración 0009).
+    # Se suman al total; no cuentan para el límite del mes.
+    visitas_anteriores: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 @event.listens_for(Invitado, "before_insert")

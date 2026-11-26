@@ -79,3 +79,23 @@ Para buscar:
 4. Pulse **Buscar**.
 
 Cada línea muestra la fecha y hora, quién lo hizo, la acción y el detalle (por ejemplo, en un cambio de datos, el valor anterior y el nuevo). La auditoría **no guarda contraseñas** y no se puede modificar.
+
+## Importar datos del programa anterior
+
+Trae los datos del programa viejo del gimnasio (el de dBase, carpeta **DB3** con archivos `.DBF`). Solo el administrador lo ve. La carpeta original **no se modifica**: se copia a la carpeta de datos (`importaciones`) y se lee la copia.
+
+1. Pulse **Elegir carpeta…** y busque la carpeta **DB3** (la que tiene `ENCLIE.DBF`).
+2. Pulse **Probar sin guardar**. No se guarda nada; se crea un **informe en Excel** con el resumen y la hoja **Problemas** (fila por fila: qué estaba mal y qué se hizo). Ábralo con **Abrir informe en Excel**.
+3. Si está de acuerdo, pulse **Importar de verdad**. Antes se hace una **copia de seguridad** (configure primero la contraseña de las copias); si la copia falla, no se importa nada. Solo se puede importar **una vez**.
+
+Qué se trae:
+
+- **Clientes** activos e inactivos, con el **mismo código** del programa anterior (por ejemplo, el 245 queda `000245`), documento, nombres, sexo, nacimiento, dirección, teléfono y acudiente. Los códigos nuevos siguen después del más alto.
+- **Vigencia:** a cada cliente se le crea una membresía del plan **«Programa anterior»** que termina en su fecha de vencimiento, con **valor $0 y sin pagos** (los valores del programa viejo no eran reales). Así Recepción ve el color correcto desde el primer día.
+- **Asistencias** con una hora aproximada según la franja (mañana 7:00, tarde 3:00 p. m., noche 7:00 p. m.).
+- **Casilleros** con su zona (hombres, mujeres o mixto) y los ocupados con su cliente y fecha de vencimiento.
+- **Invitados** con su número de visitas. Las fechas de la primera y la última visita quedan como visitas; las demás se suman al contador como «del programa anterior sin fecha».
+
+Qué **no** se trae: los pagos (sus valores no eran reales), los datos de salud y las medidas.
+
+Clientes **«Sin documento»**: si un cliente no tenía cédula, la tenía mal escrita o repetida con otro cliente, queda con el tipo «Sin documento (pendiente)». Búsquelos en el informe y escriba el documento correcto en su ficha (Modificar). Si dos códigos son la misma persona, inactive el que sobra.

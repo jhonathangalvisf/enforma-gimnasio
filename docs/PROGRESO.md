@@ -1,5 +1,33 @@
 # Progreso
 
+## Fase 10 — Importar datos del programa anterior ✅ (26/11/2026)
+
+### Qué se encontró
+El programa actual es un desarrollo propio en **dBase III** (MS-DOS, desde 1999), que se abre con `gDBASE.EXE`. Los datos están en la carpeta `DB3` en tablas `.DBF`: `ENCLIE` (clientes, «APELLIDOS*NOMBRES», SEX H/M, ACT, FCHAINI/FCHAFIN), `ENPAGO` (pagos del año, con valores de relleno de $1.000), `ENASIS` (asistencias con franja M/T/N, sin hora), `ENCASI` (casilleros por sexo, ocupados con fecha de fin) y `ENHUES` (invitados con contador y fechas de primera y última visita). Con los datos reales (26/11/2026): 8.983 clientes (1.547 activos, 88 al día), 10.358 asistencias, 411 casilleros (183 ocupados) y 10.136 invitados.
+
+### Qué se hizo
+- **Lector de .DBF** propio y de solo lectura (`importacion/dbf.py`, sin dependencias nuevas; textos en cp850; salta registros borrados).
+- **Limpieza y mapeo** (`importacion/programa_anterior.py`): código = IDCLIE con ceros (245 → `000245`); nombres y apellidos separados por el `*` y en mayúscula inicial; SEX H→M, M→F, otro→O; documento solo dígitos (5 a 11); teléfono y acudiente como contactos; nacimiento solo si es creíble. La vigencia es la fecha de fin del cliente o la mensualidad más lejana de `ENPAGO`; fechas imposibles (año 3024, 7026…) se anotan y se ignoran. Cada problema queda con archivo, registro, código, qué pasó y qué se hizo.
+- **Servicio** `ServicioImportacion` (permiso nuevo `importar_datos`, solo admin): copia los `.DBF` a `<datos>/importaciones/<fecha_hora>/origen/` y lee la copia; **modo prueba** = todo en una transacción que se deshace; **importación real** solo una vez (`config.importacion_programa_anterior`), con **copia de seguridad previa obligatoria** (si falla no se importa nada), en una sola transacción y con auditoría `importacion_programa_anterior` (solo cantidades). Siempre deja `informe_prueba.xlsx` o `informe_importacion.xlsx` (hojas Resumen y Problemas).
+- Qué crea: clientes (activos e inactivos) con contactos; una membresía del plan inactivo **«Programa anterior»** con precio 0 y sin pagos; asistencias con hora aproximada (7:00, 15:00, 19:00); casilleros con zona y asignaciones con su vencimiento; invitados con la primera y la última visita como visitas. El consecutivo de códigos sigue después del más alto. No pisa códigos, documentos, invitados ni casilleros que ya existan: los anota y sigue.
+- **Migración `0009`:** `invitados.visitas_anteriores` (visitas del programa anterior sin fecha). Se suma al total y a la lista de invitados; no cuenta para el límite del mes.
+- **Tipo de documento «SD — Sin documento (pendiente)»** para clientes sin cédula, con cédula inválida o repetida (documento `SD` + código). Recepción puede seguir editando sus contactos; no se puede usar para inscribir y en el formulario solo aparece en clientes que ya lo tienen.
+- **Pantalla:** Configuración → **Importar datos** (elegir carpeta, Probar sin guardar, Importar de verdad, Abrir informe). Ayuda de Configuración actualizada.
+- **Script** `scripts/importar_programa_anterior.py` para ensayar en una base aparte.
+- 12 pruebas nuevas con `.DBF` inventados (`tests/test_importacion.py`, `tests/test_ui_importacion.py`). Total: 522 pasan (6 omitidas fuera de Windows).
+- Con los datos reales en una base de prueba: la importación tarda unos 3 s y la búsqueda más lenta queda en 25 ms (meta < 200 ms).
+
+### Decisiones
+- Aprobado por el dueño: importar **todos** los clientes (activos e inactivos) para que un cliente que vuelva conserve su número; vigencia sin valor en caja; asistencias con hora aproximada; casilleros e invitados; **no** se importan pagos, datos de salud ni medidas.
+- Documento repetido: lo conserva el cliente activo (o el de vencimiento más reciente); el otro queda «Sin documento» y se avisa en el informe para revisar si es la misma persona.
+- Se importan todos los casilleros ocupados con su fecha (los vencidos salen en «Sugeridos para liberar»).
+- Excepción a RN-10: `visitas_anteriores` es un número fijo histórico, no un contador.
+
+### Pendientes
+- En el PC del gimnasio: configurar la contraseña de las copias, **Probar sin guardar**, revisar la hoja Problemas e **Importar de verdad** una vez instalado el programa (Fase 11).
+- Después de importar: completar los ~890 clientes «Sin documento» a medida que vengan y revisar los ~160 documentos repetidos. Muchos clientes figuran activos pero vencidos (el programa viejo no los inactivaba).
+- Usar el sistema en paralelo 1 a 2 semanas antes de dejar el anterior.
+
 ## Pagos e inscripciones solo con clave de administrador ✅ (26/11/2026)
 
 ### Qué se hizo

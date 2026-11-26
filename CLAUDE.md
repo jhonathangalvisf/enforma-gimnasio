@@ -57,6 +57,7 @@ docs/
 - Medir invitados: `python scripts/medir_invitados.py --db datos_prueba.db`
 - Medir reportes: `python scripts/medir_reportes.py --db datos_prueba.db`
 - Verificar la última copia de seguridad: `python scripts/verificar_backup.py` (o `--archivo ruta.enfbak`)
+- Ensayar la importación del programa anterior (dBase): `python scripts/importar_programa_anterior.py --origen ruta\DB3 --db prueba_importacion.db` (agregar `--guardar` para guardar; la importación real se hace en Configuración → Importar datos)
 - Medir copias de seguridad: `python scripts/medir_backup.py --db datos_prueba.db`
 - Nueva migración: `alembic revision --autogenerate -m "descripcion"` y revisar el archivo generado
 - Diagnóstico de la instalación: `python scripts/diagnostico.py` (empaquetado: `Enforma.exe --diagnostico`; prueba del .exe: `Enforma.exe --prueba-humo --reporte salida.txt`)
