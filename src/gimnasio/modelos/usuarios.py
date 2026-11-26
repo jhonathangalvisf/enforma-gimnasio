@@ -27,4 +27,8 @@ class Usuario(Base):
     intentos_fallidos: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     bloqueado_hasta: Mapped[datetime | None] = mapped_column(FechaHoraUTC)
     ultimo_login: Mapped[datetime | None] = mapped_column(FechaHoraUTC)
+    # Tras un restablecimiento hecho por el administrador, el usuario debe cambiarla al entrar.
+    debe_cambiar_clave: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
     creado_en: Mapped[datetime] = mapped_column(FechaHoraUTC, default=ahora_utc)
