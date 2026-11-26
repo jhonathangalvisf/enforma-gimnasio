@@ -93,4 +93,9 @@ QGroupBox {{
 }}
 QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; color: {AZUL}; }}
 QStatusBar {{ background: white; border-top: 1px solid {GRIS_BORDE}; }}
+
+#temasAyuda {{ background: white; border: 1px solid {GRIS_BORDE}; outline: 0; }}
+#temasAyuda::item {{ padding: 7px 10px; }}
+#temasAyuda::item:selected {{ background: {AZUL_CLARO}; color: {TEXTO}; border-left: 4px solid {AZUL}; }}
+#textoAyuda {{ background: white; border: 1px solid {GRIS_BORDE}; }}
 """

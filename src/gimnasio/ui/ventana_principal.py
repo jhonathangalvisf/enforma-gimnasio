@@ -22,6 +22,7 @@ from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
 from gimnasio.ui.configuracion import PantallaConfiguracion
 from gimnasio.ui.dialogos import DialogoCambiarClave
 from gimnasio.ui.asistencia import PantallaAsistencia
+from gimnasio.ui.ayuda import DialogoAyuda, PantallaAyuda, tema_para
 from gimnasio.ui.casilleros import PantallaCasilleros
 from gimnasio.ui.invitados import PantallaInvitados
 from gimnasio.ui.pagos import PantallaPagos
@@ -58,7 +59,7 @@ MODULOS: tuple[Modulo, ...] = (
     Modulo("configuracion", "Configuración", Permiso.CONFIGURACION,
            "Parámetros, usuarios, planes y auditoría."),
     Modulo("ayuda", "Ayuda", Permiso.AYUDA,
-           "Explicación de cada módulo en lenguaje sencillo (F1).", 8),
+           "Explicación de cada módulo en lenguaje sencillo (F1)."),
 )
 
 
@@ -91,6 +92,22 @@ class FiltroActividad(QObject):
     def eventFilter(self, objeto, evento) -> bool:  # noqa: N802 (nombre de Qt)
         if evento.type() in self.EVENTOS:
             self._control.registrar_actividad()
+        return False
+
+
+class FiltroTeclaAyuda(QObject):
+    """F1 en cualquier ventana de la aplicación (también en diálogos modales, donde un
+    QShortcut de la ventana principal no llega) abre la ayuda del módulo activo."""
+
+    def __init__(self, ventana: "VentanaPrincipal"):
+        super().__init__()
+        self._ventana = ventana
+
+    def eventFilter(self, objeto, evento) -> bool:  # noqa: N802 (nombre de Qt)
+        if (evento.type() == QEvent.Type.KeyPress and evento.key() == Qt.Key.Key_F1
+                and evento.modifiers() == Qt.KeyboardModifier.NoModifier):
+            self._ventana.abrir_ayuda()
+            return True
         return False
 
 
@@ -133,6 +150,8 @@ class VentanaPrincipal(QMainWindow):
         self.pantalla_casilleros: PantallaCasilleros | None = None
         self.pantalla_invitados: PantallaInvitados | None = None
         self.ficha_abierta: DialogoFicha | None = None
+        self.pantalla_ayuda: PantallaAyuda | None = None
+        self.ventana_ayuda: DialogoAyuda | None = None
         self._indices: dict[str, int] = {}
         for modulo in MODULOS:
             if not actual.puede(modulo.permiso):
@@ -153,6 +172,8 @@ class VentanaPrincipal(QMainWindow):
         self.control_inactividad = ControlInactividad(minutos)
         self._filtro = FiltroActividad(self.control_inactividad)
         QApplication.instance().installEventFilter(self._filtro)
+        self._filtro_ayuda = FiltroTeclaAyuda(self)
+        QApplication.instance().installEventFilter(self._filtro_ayuda)
         self._temporizador = QTimer(self)
         self._temporizador.setInterval(INTERVALO_REVISION_MS)
         self._temporizador.timeout.connect(self.revisar_inactividad)
@@ -214,6 +235,9 @@ class VentanaPrincipal(QMainWindow):
         if modulo.clave == "reportes":
             self.pantalla_reportes = PantallaReportes(self._servicios, self.actual)
             return self.pantalla_reportes
+        if modulo.clave == "ayuda":
+            self.pantalla_ayuda = PantallaAyuda(self._servicios, self.actual)
+            return self.pantalla_ayuda
         return PantallaProximamente(modulo)
 
     # --- acciones -----------------------------------------------------------
@@ -299,6 +323,46 @@ class VentanaPrincipal(QMainWindow):
             self.pantalla_recepcion.actualizar_lista()
             self.pantalla_recepcion.enfocar()
 
+    # --- ayuda (F1) -----------------------------------------------------------
+    def tema_ayuda(self) -> str | None:
+        """Tema del módulo que se está viendo (algunas pantallas eligen según la pestaña)."""
+        pantalla = self.pantallas.currentWidget()
+        if pantalla is not None and pantalla is not self:
+            tema = tema_para(pantalla, subir=False)
+            if tema:
+                return tema
+        return self.modulo_actual()
+
+    def abrir_ayuda(self, tema: str | None = None) -> DialogoAyuda:
+        """Abre (o reutiliza) la ventana de ayuda con el tema de donde se presionó F1.
+        Si hay un diálogo modal abierto, la ayuda se abre encima de él para poder usarla."""
+        activa = QApplication.activeModalWidget() or QApplication.activeWindow()
+        if self.ventana_ayuda is not None and activa is self.ventana_ayuda:
+            self.ventana_ayuda.visor.buscador.setFocus()  # F1 dentro de la ayuda: a buscar
+            return self.ventana_ayuda
+        padre = QApplication.activeModalWidget() or self
+        if tema is None:
+            tema = tema_para(activa) if activa is not None and activa is not self else None
+            tema = tema or self.tema_ayuda()
+        tema = self._servicios.ayuda.tema_contextual(self.actual, tema)
+        if self.ventana_ayuda is not None and self.ventana_ayuda.parentWidget() is padre:
+            self.ventana_ayuda.visor.mostrar(tema)
+        else:
+            if self.ventana_ayuda is not None:
+                self.ventana_ayuda.close()
+            self.ventana_ayuda = DialogoAyuda(self._servicios, self.actual, tema, padre)
+            self.ventana_ayuda.destroyed.connect(self._al_cerrar_ayuda)
+        self.ventana_ayuda.show()
+        self.ventana_ayuda.raise_()
+        self.ventana_ayuda.activateWindow()
+        return self.ventana_ayuda
+
+    def _al_cerrar_ayuda(self, *_args) -> None:
+        self.ventana_ayuda = None
+        if (QApplication.activeModalWidget() is None and self.modulo_actual() == "recepcion"
+                and self.pantalla_recepcion):
+            self.pantalla_recepcion.enfocar()  # el campo de código vuelve a quedar listo
+
     def cambiar_clave(self) -> None:
         dialogo = DialogoCambiarClave(self._servicios, self.actual, padre=self)
         if dialogo.exec():
@@ -322,6 +386,9 @@ class VentanaPrincipal(QMainWindow):
         app = QApplication.instance()
         if app:
             app.removeEventFilter(self._filtro)
+            app.removeEventFilter(self._filtro_ayuda)
+        if self.ventana_ayuda is not None:
+            self.ventana_ayuda.close()
 
     def closeEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
         if not self._cerrando_sesion:

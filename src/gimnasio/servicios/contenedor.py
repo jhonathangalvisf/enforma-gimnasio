@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from gimnasio.modelos import ahora_utc
 from gimnasio.servicios.alertas import ServicioAlertas
 from gimnasio.servicios.asistencia import ServicioAsistencia
+from gimnasio.servicios.ayuda import ServicioAyuda
 from gimnasio.servicios.auditoria import ServicioAuditoria
 from gimnasio.servicios.casilleros import ServicioCasilleros
 from gimnasio.servicios.clientes import ServicioClientes
@@ -36,6 +37,7 @@ class Servicios:
     casilleros: ServicioCasilleros
     invitados: ServicioInvitados
     reportes: ServicioReportes
+    ayuda: ServicioAyuda
 
 
 def crear_servicios(
@@ -61,4 +63,5 @@ def crear_servicios(
         invitados=invitados,
         reportes=ServicioReportes(fabrica, configuracion, pagos, asistencia, casilleros,
                                   invitados, carpeta_datos, reloj),
+        ayuda=ServicioAyuda(),
     )

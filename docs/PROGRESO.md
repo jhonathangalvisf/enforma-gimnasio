@@ -1,5 +1,29 @@
 # Progreso
 
+## Fase 8 — Ayuda integrada ✅ (26/11/2026)
+
+### Qué se hizo
+- **Contenido** (`src/gimnasio/ayuda/*.md`): 11 temas redactados desde cero en lenguaje sencillo, según cómo quedó cada módulo: Primeros pasos y atajos, Recepción, Clientes, Asistencia, Casilleros, Invitados, Pagos (membresías, abonos, recibos y caja), Reportes, Configuración (parámetros, planes y auditoría), Usuarios y Copias de seguridad. Cada tema explica para qué sirve, los pasos de cada tarea, qué significan colores y avisos, qué puede hacer Recepción y qué solo el administrador, atajos y preguntas frecuentes. Los temas se enlazan entre sí con `[Texto](tema:clave)`.
+- **`servicios/ayuda.py`**: catálogo de temas con el permiso que los muestra (el mismo del módulo), lectura de los Markdown (se pueden corregir sin tocar la lógica), buscador sin tildes ni mayúsculas que exige todas las palabras y ordena por relevancia (el título pesa más), fragmento de contexto y tema para F1 (si el usuario no puede ver el del módulo, abre Primeros pasos).
+- **`ui/ayuda.py`**: `VisorAyuda` (temas a la izquierda, texto a la derecha, buscador que filtra la lista con el número de coincidencias y resalta las palabras en el texto, enlaces entre temas), `PantallaAyuda` (menú → Ayuda, ya no dice "próximamente") y `DialogoAyuda` (ventana aparte, no modal, que abre F1).
+- **F1 contextual**: un filtro de teclado en la aplicación abre la ayuda del módulo activo, también dentro de diálogos modales (fichas, renovaciones, casilleros, usuarios…), donde se abre encima del diálogo para poder usarla. El tema se elige por el archivo de la pantalla (`TEMA_POR_ARCHIVO`) o por `TEMA_AYUDA` / `tema_ayuda()`; en Configuración, la pestaña Usuarios abre el tema Usuarios. F1 reutiliza la misma ventana. Al cerrarla en Recepción, el campo de código vuelve a quedar enfocado.
+- `pyproject.toml` empaqueta `ayuda/*.md`.
+- 28 pruebas nuevas (386 en total): cada tema tiene archivo y contenido, cada módulo del menú tiene tema, permisos por rol, enlaces válidos, búsqueda, F1 en cada módulo para admin y recepción (criterio 9 de la sección 12), F1 dentro de un diálogo modal, pestaña Usuarios, resaltado sin tildes y la ventana no modal.
+
+### Decisiones
+- **Sin textos del software actual** (confirmado por el dueño): la ayuda se escribió desde cero.
+- **Carnet con QR y soporte QR en Recepción: quedan para después** (respuesta del dueño). Los clientes se identifican dando su código personal. El `qr_token` sigue existiendo en la base y Recepción ya lo acepta, por si se retoma.
+- Recepción ve los temas de sus módulos; Configuración, Usuarios y Copias de seguridad solo el administrador.
+- Usuarios tiene tema propio (RF-H1 lo nombra aparte) aunque vive dentro de Configuración.
+- F1 abre una ventana aparte en lugar de cambiar de módulo, para no perder lo que se estaba haciendo (sobre todo en Recepción).
+- Capturas en `/mnt/project-files/fase8/`.
+
+### Pendientes / para fases siguientes
+- Fase 9: completar el tema "Copias de seguridad" (hoy describe cómo funcionará).
+- Fase 11: incluir `ayuda/*.md` en el ejecutable de PyInstaller (`ServicioAyuda` acepta otra carpeta).
+- Carnet con foto y código (y QR) cuando el dueño lo pida.
+- Al cambiar una pantalla en fases futuras, actualizar su archivo de ayuda.
+
 ## Fase 7 — Reportes ✅ (26/11/2026)
 
 ### Qué se hizo
