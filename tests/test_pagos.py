@@ -441,3 +441,36 @@ def test_migracion_completa_motivo_de_anuladas_previas(url_bd):
     with motor.connect() as c:
         assert c.execute(text("SELECT motivo_anulacion FROM membresias")).scalar()
     motor.dispose()
+
+
+def test_recibo_de_mensualidad_muestra_datos_y_nueva_vigencia(
+    servicios, admin, recepcion, mensual, cliente, reloj, monkeypatch
+):
+    """El recibo de una renovación lleva nombre, código, fecha del pago, la nueva
+    vigencia y el número consecutivo."""
+    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=DatosPago(120_000))
+    reloj.avanzar(days=20)  # paga la renovación el 16/12/2026, antes de vencer
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=DatosPago(120_000))
+    datos = servicios.pagos.datos_recibo(recepcion, m.pago.id)
+    assert (datos.vigencia_desde, datos.vigencia_hasta) == (date(2026, 12, 26), date(2027, 1, 24))
+    # Se captura todo lo que se escribe en el PDF.
+    from reportlab.pdfgen.canvas import Canvas
+
+    escrito: list[str] = []
+    for metodo in ("drawString", "drawRightString", "drawCentredString"):
+        original = getattr(Canvas, metodo)
+
+        def capturar(self, x, y, texto, *a, _original=original, **k):
+            escrito.append(texto)
+            return _original(self, x, y, texto, *a, **k)
+
+        monkeypatch.setattr(Canvas, metodo, capturar)
+    assert servicios.pagos.generar_recibo(recepcion, m.pago.id).read_bytes().startswith(b"%PDF")
+    texto = "\n".join(escrito)
+    for esperado in ("R-000002", "Laura Ríos", "000001", "Fecha de pago", "16/12/2026",
+                     "NUEVA VIGENCIA", "Del 26/12/2026 al 24/01/2027"):
+        assert esperado in texto, esperado
+    # Pagos que no son de membresía no muestran vigencia.
+    otro = servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(5_000), concepto="otro")
+    assert servicios.pagos.datos_recibo(recepcion, otro.id).vigencia_hasta is None
+

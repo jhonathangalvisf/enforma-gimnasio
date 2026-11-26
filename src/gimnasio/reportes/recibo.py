@@ -13,7 +13,7 @@ from reportlab.lib.units import inch, mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
-from gimnasio.formato import fecha_hora_local, pesos
+from gimnasio.formato import fecha, fecha_hora_local, pesos
 
 if TYPE_CHECKING:
     from gimnasio.servicios.pagos import DatosRecibo
@@ -78,11 +78,26 @@ def crear_recibo_pdf(datos: DatosRecibo, destino: Path) -> Path:
             c.drawString(MARGEN + 32 * mm, y - i * 4.2 * mm, parte)
         y -= max(1, len(_partir(valor, 52))) * 4.2 * mm + 2.2 * mm
 
-    fila("Fecha", fecha_hora_local(datos.fecha_hora))
+    fila("Fecha de pago", fecha_hora_local(datos.fecha_hora))
     fila("Cliente", datos.cliente_nombre, negrita=True)
-    fila("Código", datos.cliente_codigo)
+    fila("Código", datos.cliente_codigo, negrita=True)
     fila("Documento", datos.cliente_documento)
     fila("Concepto", datos.detalle)
+    if datos.vigencia_hasta is not None:
+        # Recuadro destacado con la nueva vigencia (hasta qué día puede entrar).
+        c.setFillColor(colors.HexColor("#e8f3ec"))
+        c.setStrokeColor(colors.HexColor("#1e7b45"))
+        c.roundRect(MARGEN, y - 9 * mm, ancho - 2 * MARGEN, 12 * mm, 2 * mm, stroke=1, fill=1)
+        c.setFillColor(colors.HexColor("#1e7b45"))
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(MARGEN + 3 * mm, y - 1 * mm, "NUEVA VIGENCIA")
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(MARGEN + 3 * mm, y - 6.5 * mm,
+                     f"Del {fecha(datos.vigencia_desde)} al {fecha(datos.vigencia_hasta)}")
+        c.setFont("Helvetica", 8)
+        c.drawRightString(ancho - MARGEN - 3 * mm, y - 6.5 * mm, "puede entrar hasta ese día inclusive")
+        c.setFillColor(colors.black)
+        y -= 15 * mm
     fila("Método de pago", datos.metodo + (f" · Ref. {datos.referencia}" if datos.referencia else ""))
     y -= 2 * mm
     c.setStrokeColor(colors.HexColor("#cccccc"))
