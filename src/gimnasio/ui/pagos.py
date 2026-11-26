@@ -11,7 +11,7 @@ from PySide6.QtCore import QDate, QLocale, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDateEdit, QGroupBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-    QSpinBox, QVBoxLayout, QWidget,
+    QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha, fecha_hora_local, pesos
@@ -364,13 +364,18 @@ class PantallaPagos(QWidget):
         self._servicios, self._actual, self._pedir = servicios, actual, pedir
         self.abrir: Callable[[Path], None] = abrir_archivo
         general = actual.puede(Permiso.CIERRE_CAJA_GENERAL)
-        capa = QVBoxLayout(self)
-        capa.setContentsMargins(24, 20, 24, 20)
-        capa.addWidget(etiqueta("Pagos y cierre de caja", "tituloPantalla"))
-        capa.addWidget(etiqueta(
+        principal = QVBoxLayout(self)
+        principal.setContentsMargins(24, 20, 24, 20)
+        principal.addWidget(etiqueta("Pagos", "tituloPantalla"))
+        principal.addWidget(etiqueta(
             "Las membresías y los pagos se registran desde la ficha del cliente (búsquela con "
             "Ctrl+K); el casillero se puede cobrar aquí con «Pagar casillero…». Aquí se ve la "
-            "caja del día; los pagos anulados no suman.", "textoSuave"))
+            "caja del día y se consultan los pagos; los anulados no suman.", "textoSuave"))
+        self.pestanas = QTabWidget()
+        principal.addWidget(self.pestanas, 1)
+        cierre = QWidget()
+        capa = QVBoxLayout(cierre)
+        self.pestanas.addTab(cierre, "Cierre de caja")
         filtros = QHBoxLayout()
         self.campo_dia = campo_fecha(servicios.pagos.hoy())
         self.campo_dia.setEnabled(general)
@@ -439,6 +444,15 @@ class PantallaPagos(QWidget):
         self.tabla.doubleClicked.connect(self.ver_recibo)
         self.cierre = None
         self.actualizar()
+
+        from gimnasio.ui.pagos_consulta import PestanaConsultaPagos, PestanaDepuracion
+
+        self.consulta = PestanaConsultaPagos(servicios, actual)
+        self.pestanas.addTab(self.consulta, "Consultar pagos")
+        self.depuracion = None
+        if actual.puede(Permiso.DEPURAR_PAGOS):
+            self.depuracion = PestanaDepuracion(servicios, actual)
+            self.pestanas.addTab(self.depuracion, "Borrar pagos antiguos")
 
     def showEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
         super().showEvent(evento)

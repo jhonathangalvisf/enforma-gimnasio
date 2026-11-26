@@ -26,7 +26,8 @@ class Permiso(str, Enum):
     REGISTRAR_PAGOS = "registrar_pagos"
     ANULAR_PAGOS = "anular_pagos"  # también anular membresías
     APLICAR_DESCUENTOS = "aplicar_descuentos"  # precio pactado distinto al del plan
-    CIERRE_CAJA_GENERAL = "cierre_caja_general"  # ver la caja de todos y de cualquier día
+    CIERRE_CAJA_GENERAL = "cierre_caja_general"
+    DEPURAR_PAGOS = "depurar_pagos"  # borrar pagos antiguos (además pide clave propia)  # ver la caja de todos y de cualquier día
     ELIMINAR_ASISTENCIA_DEL_DIA = "eliminar_asistencia_del_dia"
     ELIMINAR_ASISTENCIA_CUALQUIERA = "eliminar_asistencia_cualquiera"
     GESTIONAR_ALERTAS = "gestionar_alertas"  # crear y resolver alertas manuales
