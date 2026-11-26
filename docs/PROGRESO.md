@@ -1,5 +1,26 @@
 # Progreso
 
+## Casillero al inscribir y mensualidad + casillero en un solo recibo ✅ (26/11/2026)
+
+### Qué se hizo
+- **Migración `0008`:** el índice único de `pagos` pasa de `consecutivo` a `(consecutivo, concepto)`, así un recibo puede tener un renglón de mensualidad y uno de casillero con el mismo número. Dos recibos distintos nunca comparten número.
+- **Servicio** (`ServicioCasilleros.mensualidad_con_casillero`): registra la membresía con su pago y asigna (casillero libre elegido a mano) o renueva el casillero del cliente, con el pago del casillero en el **mismo recibo** (mismo consecutivo, método y referencia). Todo en una transacción: si algo falla no queda nada ni se gasta el número. Para eso `ServicioPagos.membresia_en_sesion` y `ServicioCasilleros._asignar_en_sesion/_renovar_en_sesion` trabajan dentro de una sesión abierta.
+- **Recibo:** `datos_recibo` junta todos los pagos con el mismo número (mensualidad primero). El PDF muestra cada concepto con su valor y el **TOTAL PAGADO**; un renglón anulado sale marcado y no suma. Solo casillero sigue con su propio recibo y el siguiente consecutivo.
+- **Inscripción:** el formulario de cliente nuevo pregunta **¿Desea casillero?**. Al guardar se abre el cobro de la mensualidad ("Inscripción: pagar mensualidad") con el casillero marcado si lo quiso. No se abre si el cliente (reactivado) ya está al día y no pidió casillero.
+- **Renovar membresía** (ficha, Ctrl+R y F2 en Recepción): sección **Pagar también el casillero (en el mismo recibo)**; renueva el que tiene o deja elegir uno libre de su zona.
+- **Pantalla Pagos:** botón **Pagar casillero…**: busca el cliente y abre asignar o renovar con el cobro marcado (recibo propio).
+- Ayuda de Clientes, Pagos y Casilleros y RF-P4 actualizados.
+- 12 pruebas nuevas (servicio y pantallas). Total: 478 pasan.
+
+### Decisiones
+- El casillero siempre se elige a mano entre los libres de la zona del cliente.
+- Mensualidad + casillero juntos = un recibo, un número; solo casillero = recibo propio con el siguiente número.
+- Los pagos se siguen anulando uno por uno: anular el casillero de un recibo combinado deja válida la mensualidad.
+- En Qt, conectar señales a un `lambda` que captura `self` hacía fallar el cierre del programa en las pruebas: se usa un método.
+
+### Pendientes
+- Ninguno de esta parte.
+
 ## Clientes: códigos, vigencia a mano y clientes al día ✅ (26/11/2026)
 
 ### Qué se hizo

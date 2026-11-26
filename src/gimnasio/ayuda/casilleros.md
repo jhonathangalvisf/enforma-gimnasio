@@ -27,7 +27,7 @@ Desde esta pantalla:
 
 También se puede asignar desde la **ficha del cliente**, en la pestaña **Casillero** → **Asignar casillero…**. Ahí solo aparecen los casilleros libres de su zona.
 
-El pago del casillero se registra **al asignarlo o renovarlo**, para que la fecha de vencimiento se mueva con el pago.
+El pago del casillero se registra **al asignarlo o renovarlo**, para que la fecha de vencimiento se mueva con el pago. También se puede cobrar **junto con la mensualidad** (al inscribir o al renovar la membresía), en el mismo recibo, o solo el casillero desde la pantalla **Pagos** → **Pagar casillero…**. El casillero siempre se elige a mano entre los libres.
 
 ## Renovar
 

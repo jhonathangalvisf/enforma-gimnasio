@@ -71,6 +71,9 @@ def test_consecutivo_de_recibo_unico(sesion, datos_basicos):
     sesion.add(_pago(c1, usuario))
     sesion.commit()
     falla_al_guardar(sesion, _pago(c2, usuario), patron="UNIQUE")
+    # Un mismo recibo puede llevar un renglón de casillero (mensualidad + casillero).
+    sesion.add(_pago(c1, usuario, concepto="casillero"))
+    sesion.commit()
 
 
 def test_membresia_fin_no_anterior_al_inicio(sesion, datos_basicos):

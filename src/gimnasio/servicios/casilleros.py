@@ -38,7 +38,9 @@ from gimnasio.servicios.auditoria import inicio_dia_utc
 from gimnasio.servicios.clientes import NOMBRES_VIGENCIA, SEXOS, Vigencia, calcular_vigencia
 from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.errores import ErrorValidacion
-from gimnasio.servicios.pagos import DatosPago, PagoRegistrado, ServicioPagos
+from gimnasio.servicios.pagos import (
+    DatosPago, MembresiaRegistrada, PagoRegistrado, ServicioPagos,
+)
 from gimnasio.servicios.permisos import Permiso, UsuarioActual, exigir
 from gimnasio.servicios.sesion import Reloj, usuario_vigente
 
@@ -246,6 +248,28 @@ class RenovacionRegistrada:
     vence_anterior: date | None
     vence: date
     pago: PagoRegistrado | None
+
+
+@dataclass(frozen=True)
+class CasilleroEnRecibo:
+    """Casillero que se cobra junto con la mensualidad, en el mismo recibo.
+
+    Se indica `casillero_id` para asignar uno libre (lo elige el usuario a mano) o
+    `asignacion_id` para renovar el que el cliente ya tiene."""
+
+    monto: int
+    casillero_id: int | None = None
+    asignacion_id: int | None = None
+    fecha_inicio: date | None = None
+    dias: int | None = None
+
+
+@dataclass(frozen=True)
+class MensualidadConCasillero:
+    membresia: MembresiaRegistrada
+    casillero: AsignacionRegistrada | RenovacionRegistrada
+    recibo: str
+    pago_id: int  # cualquiera de los dos pagos abre el mismo recibo
 
 
 @dataclass(frozen=True)
@@ -468,42 +492,51 @@ class ServicioCasilleros:
         exigir(actual, Permiso.ASIGNAR_CASILLERO)
         if pago is not None:
             exigir(actual, Permiso.REGISTRAR_PAGOS)
-        ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
-            inicio, dias = self._periodo(sesion, fecha_inicio, dias)
-            casillero = self._casillero(sesion, casillero_id)
-            cliente = self._cliente(sesion, cliente_id)
-            self._validar_asignacion(sesion, casillero, cliente)
-            vence = inicio + timedelta(days=dias - 1)
-            asignacion = CasilleroAsignacion(
-                casillero_id=casillero.id, cliente_id=cliente.id, fecha_asignacion=ahora,
-                fecha_vencimiento=vence, asignado_por=actual.id,
-            )
-            sesion.add(asignacion)
-            casillero.estado = "ocupado"
-            try:
-                sesion.flush()
-            except IntegrityError:
-                # Otro usuario lo asignó en el mismo instante: la base lo impide.
-                sesion.rollback()
-                raise ErrorValidacion(
-                    "El casillero o el cliente ya tienen una asignación activa. "
-                    "Actualice la lista e intente de nuevo."
-                ) from None
-            registrado = None
-            if pago is not None:
-                registrado = self._pagos.pago_casillero_en_sesion(
-                    sesion, actual, cliente, pago, asignacion.id, ahora)
-            auditoria.registrar(
-                sesion, "casillero_asignado", "casilleros", usuario_id=actual.id,
-                entidad_id=casillero.id, momento=ahora,
-                detalle={"casillero": casillero.numero, "cliente": cliente.codigo,
-                         "desde": formato_fecha(inicio), "vence": formato_fecha(vence),
-                         **({"recibo": registrado.recibo} if registrado else {})},
-            )
+            registrada = self._asignar_en_sesion(
+                sesion, actual, casillero_id, cliente_id, fecha_inicio, dias, pago,
+                self._reloj())
             sesion.commit()
-            return AsignacionRegistrada(asignacion.id, casillero.numero, vence, registrado)
+            return registrada
+
+    def _asignar_en_sesion(
+        self, sesion: Session, actual: UsuarioActual, casillero_id: int, cliente_id: int,
+        fecha_inicio: date | None, dias: int | None, pago: DatosPago | None, ahora: datetime,
+        consecutivo: int | None = None,
+    ) -> AsignacionRegistrada:
+        inicio, dias = self._periodo(sesion, fecha_inicio, dias)
+        casillero = self._casillero(sesion, casillero_id)
+        cliente = self._cliente(sesion, cliente_id)
+        self._validar_asignacion(sesion, casillero, cliente)
+        vence = inicio + timedelta(days=dias - 1)
+        asignacion = CasilleroAsignacion(
+            casillero_id=casillero.id, cliente_id=cliente.id, fecha_asignacion=ahora,
+            fecha_vencimiento=vence, asignado_por=actual.id,
+        )
+        sesion.add(asignacion)
+        casillero.estado = "ocupado"
+        try:
+            sesion.flush()
+        except IntegrityError:
+            # Otro usuario lo asignó en el mismo instante: la base lo impide.
+            sesion.rollback()
+            raise ErrorValidacion(
+                "El casillero o el cliente ya tienen una asignación activa. "
+                "Actualice la lista e intente de nuevo."
+            ) from None
+        registrado = None
+        if pago is not None:
+            registrado = self._pagos.pago_casillero_en_sesion(
+                sesion, actual, cliente, pago, asignacion.id, ahora, consecutivo)
+        auditoria.registrar(
+            sesion, "casillero_asignado", "casilleros", usuario_id=actual.id,
+            entidad_id=casillero.id, momento=ahora,
+            detalle={"casillero": casillero.numero, "cliente": cliente.codigo,
+                     "desde": formato_fecha(inicio), "vence": formato_fecha(vence),
+                     **({"recibo": registrado.recibo} if registrado else {})},
+        )
+        return AsignacionRegistrada(asignacion.id, casillero.numero, vence, registrado)
 
     def renovar(
         self, actual: UsuarioActual, asignacion_id: int, *,
@@ -513,41 +546,92 @@ class ServicioCasilleros:
         exigir(actual, Permiso.ASIGNAR_CASILLERO)
         if pago is not None:
             exigir(actual, Permiso.REGISTRAR_PAGOS)
+        with self._fabrica() as sesion:
+            usuario_vigente(sesion, actual)
+            registrada = self._renovar_en_sesion(
+                sesion, actual, asignacion_id, fecha_inicio, dias, pago, self._reloj())
+            sesion.commit()
+            return registrada
+
+    def _renovar_en_sesion(
+        self, sesion: Session, actual: UsuarioActual, asignacion_id: int,
+        fecha_inicio: date | None, dias: int | None, pago: DatosPago | None, ahora: datetime,
+        consecutivo: int | None = None,
+    ) -> RenovacionRegistrada:
+        asignacion = self._asignacion_activa_por_id(sesion, asignacion_id)
+        casillero = self._casillero(sesion, asignacion.casillero_id)
+        cliente = self._cliente(sesion, asignacion.cliente_id)
+        if fecha_inicio is None:
+            anterior = asignacion.fecha_vencimiento
+            hoy = self.hoy()
+            fecha_inicio = (anterior + timedelta(days=1)
+                            if anterior is not None and anterior >= hoy else hoy)
+        inicio, dias = self._periodo(sesion, fecha_inicio, dias, renovacion=True)
+        vence = inicio + timedelta(days=dias - 1)
+        anterior = asignacion.fecha_vencimiento
+        if anterior is not None and vence <= anterior:
+            raise ErrorValidacion(
+                f"El casillero ya está pagado hasta el {formato_fecha(anterior)}: el nuevo "
+                "vencimiento debe ser posterior."
+            )
+        asignacion.fecha_vencimiento = vence
+        registrado = None
+        if pago is not None:
+            registrado = self._pagos.pago_casillero_en_sesion(
+                sesion, actual, cliente, pago, asignacion.id, ahora, consecutivo)
+        auditoria.registrar(
+            sesion, "casillero_renovado", "casilleros", usuario_id=actual.id,
+            entidad_id=casillero.id, momento=ahora,
+            detalle={"casillero": casillero.numero, "cliente": cliente.codigo,
+                     "vence_antes": formato_fecha(anterior) if anterior else "",
+                     "vence": formato_fecha(vence),
+                     **({"recibo": registrado.recibo} if registrado else {})},
+        )
+        return RenovacionRegistrada(asignacion.id, casillero.numero, anterior, vence,
+                                    registrado)
+
+    def mensualidad_con_casillero(
+        self, actual: UsuarioActual, cliente_id: int, plan_id: int, *,
+        pago: DatosPago, casillero: CasilleroEnRecibo, fecha_inicio: date | None = None,
+        precio_pactado: int | None = None, motivo_descuento: str = "",
+    ) -> MensualidadConCasillero:
+        """Mensualidad y casillero pagados juntos: un solo recibo con un solo número.
+
+        El casillero se asigna (uno libre elegido a mano) o se renueva el que ya tiene.
+        Los dos pagos usan el mismo método y referencia. O se guarda todo o nada."""
+        exigir(actual, Permiso.REGISTRAR_PAGOS)
+        exigir(actual, Permiso.ASIGNAR_CASILLERO)
+        if pago is None:
+            raise ErrorValidacion(
+                "Para cobrar el casillero en el mismo recibo registre también el pago de "
+                "la mensualidad."
+            )
+        if (casillero.casillero_id is None) == (casillero.asignacion_id is None):
+            raise ErrorValidacion("Elija el casillero.")
+        pago_casillero = DatosPago(casillero.monto, pago.metodo, pago.referencia)
         ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
-            asignacion = self._asignacion_activa_por_id(sesion, asignacion_id)
-            casillero = self._casillero(sesion, asignacion.casillero_id)
-            cliente = self._cliente(sesion, asignacion.cliente_id)
-            if fecha_inicio is None:
-                anterior = asignacion.fecha_vencimiento
-                hoy = self.hoy()
-                fecha_inicio = (anterior + timedelta(days=1)
-                                if anterior is not None and anterior >= hoy else hoy)
-            inicio, dias = self._periodo(sesion, fecha_inicio, dias, renovacion=True)
-            vence = inicio + timedelta(days=dias - 1)
-            anterior = asignacion.fecha_vencimiento
-            if anterior is not None and vence <= anterior:
-                raise ErrorValidacion(
-                    f"El casillero ya está pagado hasta el {formato_fecha(anterior)}: el nuevo "
-                    "vencimiento debe ser posterior."
-                )
-            asignacion.fecha_vencimiento = vence
-            registrado = None
-            if pago is not None:
-                registrado = self._pagos.pago_casillero_en_sesion(
-                    sesion, actual, cliente, pago, asignacion.id, ahora)
-            auditoria.registrar(
-                sesion, "casillero_renovado", "casilleros", usuario_id=actual.id,
-                entidad_id=casillero.id, momento=ahora,
-                detalle={"casillero": casillero.numero, "cliente": cliente.codigo,
-                         "vence_antes": formato_fecha(anterior) if anterior else "",
-                         "vence": formato_fecha(vence),
-                         **({"recibo": registrado.recibo} if registrado else {})},
+            membresia = self._pagos.membresia_en_sesion(
+                sesion, actual, cliente_id, plan_id, fecha_inicio=fecha_inicio,
+                precio_pactado=precio_pactado, motivo_descuento=motivo_descuento, pago=pago,
+                ahora=ahora,
             )
+            numero = membresia.pago.consecutivo
+            if casillero.asignacion_id is not None:
+                asignacion = self._asignacion_activa_por_id(sesion, casillero.asignacion_id)
+                if asignacion.cliente_id != cliente_id:
+                    raise ErrorValidacion("Ese casillero no es de este cliente.")
+                resultado = self._renovar_en_sesion(
+                    sesion, actual, asignacion.id, casillero.fecha_inicio, casillero.dias,
+                    pago_casillero, ahora, numero)
+            else:
+                resultado = self._asignar_en_sesion(
+                    sesion, actual, casillero.casillero_id, cliente_id, casillero.fecha_inicio,
+                    casillero.dias, pago_casillero, ahora, numero)
             sesion.commit()
-            return RenovacionRegistrada(asignacion.id, casillero.numero, anterior, vence,
-                                        registrado)
+            return MensualidadConCasillero(membresia, resultado, membresia.pago.recibo,
+                                           membresia.pago.id)
 
     def corregir_vencimiento(
         self, actual: UsuarioActual, asignacion_id: int, vence: date, motivo: str

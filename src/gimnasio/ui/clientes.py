@@ -6,6 +6,7 @@ el usuario baja (carga virtual) y el orden se hace en la base de datos.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -158,6 +159,8 @@ class PantallaClientes(QWidget):
         super().__init__()
         self._servicios = servicios
         self._actual = actual
+        # Las pruebas reemplazan cómo se muestran los diálogos (exec bloquea).
+        self._ejecutar: Callable[[QDialog], int] = lambda d: d.exec()
         capa = QVBoxLayout(self)
         capa.setContentsMargins(24, 20, 24, 20)
         capa.setSpacing(10)
@@ -434,9 +437,30 @@ class PantallaClientes(QWidget):
         from gimnasio.ui.cliente_formulario import DialogoCliente
 
         dialogo = DialogoCliente(self._servicios, self._actual, padre=self)
-        if dialogo.exec() and dialogo.ficha:
+        if self._ejecutar(dialogo) and dialogo.ficha:
+            self.cobrar_inscripcion(dialogo.ficha, dialogo.quiere_casillero)
             self.recargar()
             self.abrir_ficha.emit(dialogo.ficha.id)
+
+    def cobrar_inscripcion(self, ficha, con_casillero: bool):
+        """Después de inscribir: cobra la mensualidad y, si quiere, el casillero en el mismo
+        recibo. Si el cliente ya tiene membresía vigente (p. ej. reactivado) no se abre."""
+        from gimnasio.ui.pagos import DialogoMembresia
+
+        if not self._actual.puede(Permiso.REGISTRAR_PAGOS) or ficha.estado != "activo":
+            return None
+        if ficha.vigencia in (Vigencia.VIGENTE, Vigencia.POR_VENCER) and not con_casillero:
+            return None
+        try:
+            dialogo = DialogoMembresia(self._servicios, self._actual, ficha.id,
+                                       f"{ficha.nombres} {ficha.apellidos}", padre=self,
+                                       con_casillero=con_casillero,
+                                       titulo="Inscripción: pagar mensualidad")
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return None
+        self._ejecutar(dialogo)
+        return dialogo
 
     def exportar(self, formato: str, ruta: str | None = None) -> int | None:
         try:

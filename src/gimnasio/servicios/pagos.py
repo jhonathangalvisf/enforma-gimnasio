@@ -10,7 +10,9 @@ Reglas:
   no anulados. Ningún pago puede superar el saldo.
 - Nada financiero se borra (RN-07): pagos y membresías se anulan con motivo (solo
   el administrador). Anular una membresía anula también sus pagos.
-- Cada pago recibe un consecutivo de recibo que nunca se repite.
+- Cada recibo recibe un consecutivo que nunca se repite. Si el cliente paga la
+  mensualidad y el casillero juntos, los dos pagos comparten el número: un solo
+  recibo con los dos conceptos (migración 0008).
 - Cierre de caja: Recepción ve el suyo del día; el administrador, el de cualquier
   usuario y fecha. Los pagos anulados no suman, pero se listan con su motivo.
 """
@@ -174,6 +176,16 @@ class CierreCaja:
 
 
 @dataclass(frozen=True)
+class LineaRecibo:
+    """Un concepto de un recibo con varios (mensualidad + casillero)."""
+
+    concepto: str
+    detalle: str
+    monto: int
+    anulado: bool = False
+
+
+@dataclass(frozen=True)
 class DatosRecibo:
     recibo: str
     fecha_hora: datetime  # UTC
@@ -199,6 +211,8 @@ class DatosRecibo:
     # Pagos de membresía: período que cubre (la nueva vigencia del cliente).
     vigencia_desde: date | None = None
     vigencia_hasta: date | None = None
+    # Solo si el recibo tiene más de un concepto; `monto` es entonces el total.
+    lineas: list[LineaRecibo] = field(default_factory=list)
 
 
 def _motivo(texto: str, que: str) -> str:
@@ -292,106 +306,120 @@ class ServicioPagos:
     ) -> MembresiaRegistrada:
         """Registra la membresía y, si se indica, su primer pago (completo o abono)."""
         exigir(actual, Permiso.REGISTRAR_PAGOS)
+        with self._fabrica() as sesion:
+            usuario_vigente(sesion, actual)
+            registrada = self.membresia_en_sesion(
+                sesion, actual, cliente_id, plan_id, fecha_inicio=fecha_inicio,
+                precio_pactado=precio_pactado, motivo_descuento=motivo_descuento, pago=pago,
+                ahora=self._reloj(),
+            )
+            sesion.commit()
+            return registrada
+
+    def membresia_en_sesion(
+        self, sesion: Session, actual: UsuarioActual, cliente_id: int, plan_id: int, *,
+        fecha_inicio: date | None, precio_pactado: int | None, motivo_descuento: str,
+        pago: DatosPago | None, ahora: datetime,
+    ) -> MembresiaRegistrada:
+        """Membresía (y su pago) dentro de una transacción abierta, sin confirmarla.
+        La usa también el cobro de mensualidad + casillero en un solo recibo."""
+        exigir(actual, Permiso.REGISTRAR_PAGOS)
         if pago is not None:
             pago = _validar_pago(pago)
         hoy = self.hoy()
-        ahora = self._reloj()
-        with self._fabrica() as sesion:
-            usuario_vigente(sesion, actual)
-            cliente = self._cliente(sesion, cliente_id)
-            if cliente.estado != "activo":
-                raise ErrorValidacion(
-                    "El cliente está inactivo. El administrador debe activarlo antes de "
-                    "registrarle una membresía."
-                )
-            plan = sesion.get(Plan, plan_id)
-            if plan is None:
-                raise ErrorValidacion("Elija un plan.")
-            if not plan.activo:
-                raise ErrorValidacion(f"El plan «{plan.nombre}» está desactivado.")
+        cliente = self._cliente(sesion, cliente_id)
+        if cliente.estado != "activo":
+            raise ErrorValidacion(
+                "El cliente está inactivo. El administrador debe activarlo antes de "
+                "registrarle una membresía."
+            )
+        plan = sesion.get(Plan, plan_id)
+        if plan is None:
+            raise ErrorValidacion("Elija un plan.")
+        if not plan.activo:
+            raise ErrorValidacion(f"El plan «{plan.nombre}» está desactivado.")
 
-            # Precio: el del plan, salvo descuento del administrador con motivo.
-            if precio_pactado is None:
-                precio_pactado = plan.precio
-            try:
-                precio_pactado = int(precio_pactado)
-            except (TypeError, ValueError):
-                raise ErrorValidacion("El precio debe ser un número entero de pesos.") from None
-            if not 0 <= precio_pactado <= MONTO_MAXIMO:
-                raise ErrorValidacion("El precio no es válido.")
-            motivo = None
-            if precio_pactado != plan.precio:
-                if not actual.puede(Permiso.APLICAR_DESCUENTOS):
-                    raise ErrorPermiso(
-                        "Solo el administrador puede cambiar el precio del plan (descuento)."
-                    )
-                motivo = _motivo(motivo_descuento, "del descuento o del cambio de precio")
-
-            # Fechas (RN-03 y RN-04).
-            ultima = self._ultima_membresia(sesion, cliente.id)
-            politica = self._configuracion.obtener("renovacion_anticipada", sesion)
-            sugerida = calcular_inicio_renovacion(ultima.fecha_fin if ultima else None, hoy, politica)
-            if fecha_inicio is None:
-                fecha_inicio = sugerida
-            if fecha_inicio > hoy + timedelta(days=DIAS_ADELANTE_MAXIMO):
-                raise ErrorValidacion(
-                    f"La fecha de inicio no puede ser más de {DIAS_ADELANTE_MAXIMO} días después de hoy."
-                )
-            if (fecha_inicio < hoy - timedelta(days=DIAS_ATRAS_RECEPCION)
-                    and not actual.puede(Permiso.APLICAR_DESCUENTOS)):
+        # Precio: el del plan, salvo descuento del administrador con motivo.
+        if precio_pactado is None:
+            precio_pactado = plan.precio
+        try:
+            precio_pactado = int(precio_pactado)
+        except (TypeError, ValueError):
+            raise ErrorValidacion("El precio debe ser un número entero de pesos.") from None
+        if not 0 <= precio_pactado <= MONTO_MAXIMO:
+            raise ErrorValidacion("El precio no es válido.")
+        motivo = None
+        if precio_pactado != plan.precio:
+            if not actual.puede(Permiso.APLICAR_DESCUENTOS):
                 raise ErrorPermiso(
-                    f"Solo el administrador puede registrar una membresía que inició hace más "
-                    f"de {DIAS_ATRAS_RECEPCION} días."
+                    "Solo el administrador puede cambiar el precio del plan (descuento)."
                 )
-            fecha_fin = calcular_fecha_fin(fecha_inicio, plan.duracion_dias)
-            if politica == "dia_siguiente":
-                cruce = sesion.scalars(
-                    select(Membresia).where(
-                        Membresia.cliente_id == cliente.id, Membresia.estado == "activa",
-                        Membresia.fecha_inicio <= fecha_fin, Membresia.fecha_fin >= fecha_inicio,
-                    ).order_by(Membresia.fecha_fin.desc())
-                ).first()
-                if cruce is not None:
-                    raise ErrorValidacion(
-                        f"Las fechas se cruzan con la membresía del {formato_fecha(cruce.fecha_inicio)} "
-                        f"al {formato_fecha(cruce.fecha_fin)}. La nueva puede iniciar el "
-                        f"{formato_fecha(cruce.fecha_fin + timedelta(days=1))}."
-                    )
+            motivo = _motivo(motivo_descuento, "del descuento o del cambio de precio")
 
-            if pago is not None and pago.monto > precio_pactado:
+        # Fechas (RN-03 y RN-04).
+        ultima = self._ultima_membresia(sesion, cliente.id)
+        politica = self._configuracion.obtener("renovacion_anticipada", sesion)
+        sugerida = calcular_inicio_renovacion(ultima.fecha_fin if ultima else None, hoy, politica)
+        if fecha_inicio is None:
+            fecha_inicio = sugerida
+        if fecha_inicio > hoy + timedelta(days=DIAS_ADELANTE_MAXIMO):
+            raise ErrorValidacion(
+                f"La fecha de inicio no puede ser más de {DIAS_ADELANTE_MAXIMO} días después de hoy."
+            )
+        if (fecha_inicio < hoy - timedelta(days=DIAS_ATRAS_RECEPCION)
+                and not actual.puede(Permiso.APLICAR_DESCUENTOS)):
+            raise ErrorPermiso(
+                f"Solo el administrador puede registrar una membresía que inició hace más "
+                f"de {DIAS_ATRAS_RECEPCION} días."
+            )
+        fecha_fin = calcular_fecha_fin(fecha_inicio, plan.duracion_dias)
+        if politica == "dia_siguiente":
+            cruce = sesion.scalars(
+                select(Membresia).where(
+                    Membresia.cliente_id == cliente.id, Membresia.estado == "activa",
+                    Membresia.fecha_inicio <= fecha_fin, Membresia.fecha_fin >= fecha_inicio,
+                ).order_by(Membresia.fecha_fin.desc())
+            ).first()
+            if cruce is not None:
                 raise ErrorValidacion(
-                    "El pago no puede ser mayor que el precio de la membresía."
+                    f"Las fechas se cruzan con la membresía del {formato_fecha(cruce.fecha_inicio)} "
+                    f"al {formato_fecha(cruce.fecha_fin)}. La nueva puede iniciar el "
+                    f"{formato_fecha(cruce.fecha_fin + timedelta(days=1))}."
                 )
 
-            membresia = Membresia(
-                cliente_id=cliente.id, plan_id=plan.id, fecha_inicio=fecha_inicio,
-                fecha_fin=fecha_fin, precio_pactado=precio_pactado, estado="activa",
-                motivo_descuento=motivo, creado_por=actual.id, creado_en=ahora,
+        if pago is not None and pago.monto > precio_pactado:
+            raise ErrorValidacion(
+                "El pago no puede ser mayor que el precio de la membresía."
             )
-            sesion.add(membresia)
-            sesion.flush()
-            detalle = {
-                "cliente": cliente.codigo, "plan": plan.nombre,
-                "inicio": formato_fecha(fecha_inicio), "fin": formato_fecha(fecha_fin),
-                "precio_pactado": precio_pactado,
-            }
-            if motivo:
-                detalle.update(precio_plan=plan.precio, motivo_descuento=motivo)
-            auditoria.registrar(
-                sesion, "membresia_registrada", "membresias", usuario_id=actual.id,
-                entidad_id=membresia.id, detalle=detalle, momento=ahora,
+
+        membresia = Membresia(
+            cliente_id=cliente.id, plan_id=plan.id, fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin, precio_pactado=precio_pactado, estado="activa",
+            motivo_descuento=motivo, creado_por=actual.id, creado_en=ahora,
+        )
+        sesion.add(membresia)
+        sesion.flush()
+        detalle = {
+            "cliente": cliente.codigo, "plan": plan.nombre,
+            "inicio": formato_fecha(fecha_inicio), "fin": formato_fecha(fecha_fin),
+            "precio_pactado": precio_pactado,
+        }
+        if motivo:
+            detalle.update(precio_plan=plan.precio, motivo_descuento=motivo)
+        auditoria.registrar(
+            sesion, "membresia_registrada", "membresias", usuario_id=actual.id,
+            entidad_id=membresia.id, detalle=detalle, momento=ahora,
+        )
+        registrado = None
+        if pago is not None:
+            registrado = self._crear_pago(
+                sesion, actual, cliente, pago, "membresia", membresia, 0, ahora
             )
-            registrado = None
-            if pago is not None:
-                registrado = self._crear_pago(
-                    sesion, actual, cliente, pago, "membresia", membresia, 0, ahora
-                )
-            sesion.commit()
-            return MembresiaRegistrada(
-                id=membresia.id, plan=plan.nombre, fecha_inicio=fecha_inicio,
-                fecha_fin=fecha_fin, precio_pactado=precio_pactado,
-                saldo=precio_pactado - (pago.monto if pago else 0), pago=registrado,
-            )
+        return MembresiaRegistrada(
+            id=membresia.id, plan=plan.nombre, fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin, precio_pactado=precio_pactado,
+            saldo=precio_pactado - (pago.monto if pago else 0), pago=registrado,
+        )
 
     def anular_membresia(self, actual: UsuarioActual, membresia_id: int, motivo: str) -> int:
         """Solo admin. Anula también los pagos válidos de la membresía (mismo motivo).
@@ -573,38 +601,49 @@ class ServicioPagos:
 
     # --- recibos ----------------------------------------------------------------------
     def datos_recibo(self, actual: UsuarioActual, pago_id: int) -> DatosRecibo:
+        """Datos del recibo al que pertenece el pago, con todos sus conceptos."""
         exigir(actual, Permiso.REGISTRAR_PAGOS)
         with self._fabrica() as sesion:
             pago = sesion.get(Pago, pago_id)
             if pago is None:
                 raise ErrorValidacion("El pago no existe.")
-            cliente = sesion.get(Cliente, pago.cliente_id)
-            usuario = sesion.get(Usuario, pago.usuario_id)
+            # Mensualidad primero, luego casillero y otros.
+            orden = {"membresia": 0, "casillero": 1, "otro": 2}
+            pagos = sorted(
+                sesion.scalars(select(Pago).where(Pago.consecutivo == pago.consecutivo)),
+                key=lambda p: (orden[p.concepto], p.id),
+            )
+            principal = pagos[0]
+            cliente = sesion.get(Cliente, principal.cliente_id)
+            usuario = sesion.get(Usuario, principal.usuario_id)
             obtener = lambda clave: self._configuracion.obtener(clave, sesion)  # noqa: E731
-            detalle = CONCEPTOS[pago.concepto]
             precio = saldo = vigencia_desde = vigencia_hasta = None
-            if pago.casillero_asignacion_id is not None:
-                asignacion = sesion.get(CasilleroAsignacion, pago.casillero_asignacion_id)
-                casillero = sesion.get(Casillero, asignacion.casillero_id)
-                detalle = f"Casillero {casillero.numero}"
-            if pago.membresia_id is not None:
-                membresia = sesion.get(Membresia, pago.membresia_id)
-                plan = sesion.get(Plan, membresia.plan_id)
-                detalle = (f"Membresía {plan.nombre} del {formato_fecha(membresia.fecha_inicio)} "
-                           f"al {formato_fecha(membresia.fecha_fin)}")
+            if principal.membresia_id is not None:
+                membresia = sesion.get(Membresia, principal.membresia_id)
                 precio = membresia.precio_pactado
                 vigencia_desde, vigencia_hasta = membresia.fecha_inicio, membresia.fecha_fin
                 # Saldo justo después de este pago: lo pagado hasta este recibo inclusive.
                 pagado = sesion.scalar(
                     select(func.coalesce(func.sum(Pago.monto), 0)).where(
                         Pago.membresia_id == membresia.id, Pago.anulado.is_(False),
-                        Pago.consecutivo <= pago.consecutivo,
+                        Pago.consecutivo <= principal.consecutivo,
                     )
                 )
                 saldo = max(0, precio - int(pagado))
+            lineas = [
+                LineaRecibo(CONCEPTOS[p.concepto], self._detalle_pago(sesion, p), p.monto, p.anulado)
+                for p in pagos
+            ]
+            todos_anulados = all(p.anulado for p in pagos)
+            if len(pagos) == 1:
+                monto, extra = principal.monto, []
+            else:
+                monto = sum(p.monto for p in pagos if todos_anulados or not p.anulado)
+                extra = lineas
+            motivos = "; ".join(dict.fromkeys(p.motivo_anulacion for p in pagos if p.anulado))
             return DatosRecibo(
-                recibo=numero_recibo(obtener("recibo_prefijo"), pago.consecutivo),
-                fecha_hora=pago.fecha_hora,
+                recibo=numero_recibo(obtener("recibo_prefijo"), principal.consecutivo),
+                fecha_hora=principal.fecha_hora,
                 gimnasio_nombre=obtener("gimnasio_nombre") or "Enforma",
                 gimnasio_nit=obtener("gimnasio_nit"),
                 gimnasio_direccion=obtener("gimnasio_direccion"),
@@ -613,13 +652,27 @@ class ServicioPagos:
                 cliente_codigo=cliente.codigo,
                 cliente_nombre=f"{cliente.nombres} {cliente.apellidos}",
                 cliente_documento=f"{cliente.tipo_documento} {cliente.documento}",
-                concepto=CONCEPTOS[pago.concepto], detalle=detalle,
-                metodo=METODOS[pago.metodo], referencia=pago.referencia or "",
-                monto=pago.monto, precio_membresia=precio, saldo_despues=saldo,
+                concepto=CONCEPTOS[principal.concepto], detalle=lineas[0].detalle,
+                metodo=METODOS[principal.metodo], referencia=principal.referencia or "",
+                monto=monto, precio_membresia=precio, saldo_despues=saldo,
                 usuario=usuario.nombre_completo if usuario else "—",
-                anulado=pago.anulado, motivo_anulacion=pago.motivo_anulacion or "",
+                anulado=todos_anulados, motivo_anulacion=motivos if todos_anulados else "",
                 vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta,
+                lineas=extra,
             )
+
+    @staticmethod
+    def _detalle_pago(sesion: Session, pago: Pago) -> str:
+        if pago.casillero_asignacion_id is not None:
+            asignacion = sesion.get(CasilleroAsignacion, pago.casillero_asignacion_id)
+            casillero = sesion.get(Casillero, asignacion.casillero_id)
+            return f"Casillero {casillero.numero}"
+        if pago.membresia_id is not None:
+            membresia = sesion.get(Membresia, pago.membresia_id)
+            plan = sesion.get(Plan, membresia.plan_id)
+            return (f"Membresía {plan.nombre} del {formato_fecha(membresia.fecha_inicio)} "
+                    f"al {formato_fecha(membresia.fecha_fin)}")
+        return CONCEPTOS[pago.concepto]
 
     def generar_recibo(
         self, actual: UsuarioActual, pago_id: int, destino: Path | str | None = None
@@ -672,21 +725,23 @@ class ServicioPagos:
 
     def pago_casillero_en_sesion(
         self, sesion: Session, actual: UsuarioActual, cliente: Cliente, datos: DatosPago,
-        asignacion_id: int, ahora: datetime,
+        asignacion_id: int, ahora: datetime, consecutivo: int | None = None,
     ) -> PagoRegistrado:
         """Pago de casillero dentro de la transacción del servicio de casilleros
-        (asignar o renovar y cobrar quedan juntos: o se guarda todo o nada)."""
+        (asignar o renovar y cobrar quedan juntos: o se guarda todo o nada).
+        Con `consecutivo` va en el mismo recibo que el pago de la mensualidad."""
         exigir(actual, Permiso.REGISTRAR_PAGOS)
         datos = _validar_pago(datos)
         return self._crear_pago(sesion, actual, cliente, datos, "casillero", None, 0, ahora,
-                                casillero_asignacion_id=asignacion_id)
+                                casillero_asignacion_id=asignacion_id, consecutivo=consecutivo)
 
     def _crear_pago(
         self, sesion: Session, actual: UsuarioActual, cliente: Cliente, datos: DatosPago,
         concepto: str, membresia: Membresia | None, pagado_antes: int, ahora: datetime,
-        casillero_asignacion_id: int | None = None,
+        casillero_asignacion_id: int | None = None, consecutivo: int | None = None,
     ) -> PagoRegistrado:
-        consecutivo = self._siguiente_consecutivo(sesion)
+        if consecutivo is None:
+            consecutivo = self._siguiente_consecutivo(sesion)
         pago = Pago(
             consecutivo=consecutivo, cliente_id=cliente.id,
             membresia_id=membresia.id if membresia else None, concepto=concepto,

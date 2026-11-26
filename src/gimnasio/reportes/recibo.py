@@ -82,7 +82,24 @@ def crear_recibo_pdf(datos: DatosRecibo, destino: Path) -> Path:
     fila("Cliente", datos.cliente_nombre, negrita=True)
     fila("Código", datos.cliente_codigo, negrita=True)
     fila("Documento", datos.cliente_documento)
-    fila("Concepto", datos.detalle)
+    if datos.lineas:
+        # Recibo con varios conceptos (mensualidad + casillero): uno por renglón.
+        for i, linea in enumerate(datos.lineas):
+            c.setFont("Helvetica", 9)
+            c.setFillColor(colors.HexColor("#555555"))
+            c.drawString(MARGEN, y, "Conceptos" if i == 0 else "")
+            c.setFillColor(colors.HexColor("#b42318") if linea.anulado else colors.black)
+            c.setFont("Helvetica", 9.5)
+            texto = linea.detalle + ("  (ANULADO)" if linea.anulado else "")
+            partes = _partir(texto, 40)
+            for k, parte in enumerate(partes):
+                c.drawString(MARGEN + 32 * mm, y - k * 4.2 * mm, parte)
+            c.setFont("Helvetica-Bold", 9.5)
+            c.drawRightString(ancho - MARGEN, y, pesos(linea.monto))
+            c.setFillColor(colors.black)
+            y -= len(partes) * 4.2 * mm + 2.2 * mm
+    else:
+        fila("Concepto", datos.detalle)
     if datos.vigencia_hasta is not None:
         # Recuadro destacado con la nueva vigencia (hasta qué día puede entrar).
         c.setFillColor(colors.HexColor("#e8f3ec"))
@@ -107,7 +124,7 @@ def crear_recibo_pdf(datos: DatosRecibo, destino: Path) -> Path:
         fila("Valor membresía", pesos(datos.precio_membresia))
     c.setFont("Helvetica", 9)
     c.setFillColor(colors.HexColor("#555555"))
-    c.drawString(MARGEN, y, "VALOR PAGADO")
+    c.drawString(MARGEN, y, "TOTAL PAGADO" if datos.lineas else "VALOR PAGADO")
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 16)
     c.drawString(MARGEN + 32 * mm, y - 1 * mm, pesos(datos.monto))
