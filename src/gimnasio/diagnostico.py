@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import secrets
 import sqlite3
+from contextlib import closing
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -95,7 +96,7 @@ def revisar_base(carpeta: Path) -> Revision:
         return Revision("Base de datos", AVISO,
                         "todavía no existe (se crea al abrir Enforma por primera vez).")
     try:
-        with sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True) as c:
+        with closing(sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)) as c:
             integridad = c.execute("PRAGMA quick_check").fetchone()[0]
             revision = c.execute("SELECT version_num FROM alembic_version").fetchone()
             clientes = c.execute("SELECT COUNT(*) FROM clientes").fetchone()[0]
@@ -163,7 +164,7 @@ def destino_configurado(carpeta_datos: Path) -> Path | None:
     if not base.is_file():
         return None
     try:
-        with sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True) as c:
+        with closing(sqlite3.connect(f"file:{base.as_posix()}?mode=ro", uri=True)) as c:
             fila = c.execute("SELECT valor FROM config WHERE clave = 'backup_destino'").fetchone()
     except sqlite3.Error:
         return None

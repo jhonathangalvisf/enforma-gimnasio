@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import sqlite3
+from contextlib import closing
 import sys
 import tempfile
 import time
@@ -51,7 +52,7 @@ def verificar(ruta: Path, clave: str) -> bool:
         except ErrorBackup as e:
             print(f"ERROR: {e}")
             return False
-        with sqlite3.connect(Path(temporal) / "enforma.db") as c:
+        with closing(sqlite3.connect(Path(temporal) / "enforma.db")) as c:
             tablas = c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()[0]
     segundos = time.perf_counter() - inicio
     print(f"  Integridad: {resumen.integridad}   Tablas: {tablas}   Esquema: {resumen.revision}")

@@ -45,6 +45,12 @@ def test_alembic_usa_la_carpeta_del_programa():
     assert Path(cfg.get_main_option("script_location")) == rutas.carpeta_programa() / "migraciones"
 
 
+def test_url_con_porcentaje_de_windows():
+    """En Windows la URL de la base trae "C%3A/...": Alembic no debe fallar (restaurar)."""
+    url = "sqlite:///C%3A/Users/gimnasio/AppData/Roaming/Enforma/enforma.db"
+    assert configuracion_alembic(url).get_main_option("sqlalchemy.url") == url
+
+
 def test_version_unica():
     assert re.fullmatch(r"\d+\.\d+\.\d+", __version__)
     texto = (RAIZ / "pyproject.toml").read_text(encoding="utf-8")

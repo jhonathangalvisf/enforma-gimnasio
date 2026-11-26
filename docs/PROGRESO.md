@@ -24,6 +24,12 @@
 ### Verificado en Linux (el .exe de Windows lo construye el workflow)
 - El mismo spec empaquetado para Linux: `--solo-migrar`, `--diagnostico` y `--prueba-humo` pasan **sin Python del sistema y con `LANG=C`** (así apareció el problema de `alembic.ini`); con la interfaz abierta, una segunda copia se cierra en 0,9 s y la primera queda registrada como "ya estaba abierto".
 
+### Primera corrida en Windows (GitHub Actions)
+- **Instalador:** todo en verde: PyInstaller, prueba de humo del .exe, Inno Setup, instalación silenciosa, diagnóstico con **"Protección DPAPI: funciona"**, prueba de humo del programa instalado, instancia única con la interfaz abierta y desinstalación conservando los datos.
+- **Pruebas:** 451 de 455 pasaron; las 6 de DPAPI real pasaron. Las 4 que fallaron eran **errores reales de la Fase 9 que solo aparecen en Windows**, ya corregidos:
+  - **Restaurar una copia fallaba en Windows:** la URL de la base trae `C%3A/...` y Alembic la guarda en configparser, que trata el `%` como interpolación. Ahora se escapa (`db/migraciones.py`) y hay una prueba con una URL de Windows.
+  - `verificar_backup.py` dejaba abierta la base temporal (`with sqlite3.connect()` no cierra la conexión) y Windows no dejaba borrarla. Ahora usa `closing()`, igual que el diagnóstico.
+
 ### Criterios de aceptación (sección 12)
 | # | Criterio | Estado | Cómo se comprueba |
 |---|---|---|---|
@@ -47,7 +53,6 @@
 - El logo del gimnasio queda como logo por defecto de los recibos.
 
 ### Pendientes
-- **Ejecutar el workflow en Windows** y revisar el resultado (primera vez que la suite corre en Windows).
 - **En el PC del gimnasio:** instalar, abrir el Diagnóstico y seguir "Verificar la protección de la contraseña (DPAPI)" del manual; probar en Windows Sandbox si es Windows Pro (criterio 10).
 - Fase 10 (importador) cuando el dueño tenga las exportaciones; carnet con QR cuando lo pida; Fase 12 (huella) opcional.
 

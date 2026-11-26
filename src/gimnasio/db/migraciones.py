@@ -18,7 +18,9 @@ def configuracion_alembic(url: str | None = None) -> Config:
     cfg.set_main_option("script_location", str(RAIZ_PROYECTO / "migraciones"))
     cfg.set_main_option("path_separator", "os")
     if url:
-        cfg.set_main_option("sqlalchemy.url", url)
+        # En Windows la URL lleva "C%3A/..." y Alembic la guarda con interpolación de
+        # configparser: el % debe ir duplicado o falla (por ejemplo al restaurar).
+        cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
     return cfg
 
 
