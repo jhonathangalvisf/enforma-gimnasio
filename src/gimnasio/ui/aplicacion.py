@@ -22,6 +22,8 @@ class Aplicacion:
         app.setQuitOnLastWindowClosed(False)
 
     def iniciar(self) -> None:
+        # Planes de ejemplo (inactivos, sin precio) solo si la base no tiene ninguno.
+        self.servicios.planes.crear_planes_ejemplo()
         if not self.servicios.usuarios.hay_usuarios():
             dialogo = DialogoPrimerAdministrador(self.servicios)
             if dialogo.exec() != QDialog.DialogCode.Accepted:

@@ -52,6 +52,9 @@ QMainWindow, QDialog {{ background: {GRIS_FONDO}; }}
 QLineEdit, QSpinBox, QComboBox, QDateEdit {{
     background: white; border: 1px solid {GRIS_BORDE}; border-radius: 4px; padding: 5px 7px;
 }}
+/* Números sin flechas visibles: se escribe o se usan las teclas ↑ ↓. (Con
+   setButtonSymbols(NoButtons) Qt no dibuja el texto bajo esta hoja de estilos.) */
+QSpinBox::up-button, QSpinBox::down-button {{ width: 0px; border: none; }}
 QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QDateEdit:focus {{
     border: 1px solid {AZUL};
 }}

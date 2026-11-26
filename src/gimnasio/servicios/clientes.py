@@ -32,6 +32,7 @@ from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
 from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.errores import ErrorPermiso, ErrorValidacion
+from gimnasio.servicios.pagos import saldos_por_membresia
 from gimnasio.servicios.permisos import Permiso, UsuarioActual, exigir
 from gimnasio.servicios.sesion import Reloj, usuario_vigente
 from gimnasio.texto import normalizar
@@ -182,6 +183,13 @@ class FilaMembresia:
     precio_pactado: int
     estado: str
     motivo_descuento: str | None
+    pagado: int = 0
+    motivo_anulacion: str | None = None
+
+    @property
+    def saldo(self) -> int:
+        """Lo que falta por pagar (0 si está anulada)."""
+        return 0 if self.estado == "anulada" else max(0, self.precio_pactado - self.pagado)
 
 
 @dataclass(frozen=True)
@@ -196,6 +204,7 @@ class FilaPago:
     usuario: str
     anulado: bool
     motivo_anulacion: str | None
+    membresia_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -259,6 +268,10 @@ class FichaCliente:
     asistencias: list[FilaAsistencia]
     alertas: list[FilaAlerta]
     historial_casilleros: list[FilaCasillero]
+
+    @property
+    def saldo_pendiente(self) -> int:
+        return sum(m.saldo for m in self.membresias)
 
     @property
     def nombre_completo(self) -> str:
@@ -611,14 +624,17 @@ class ServicioClientes:
             datos = self._datos_actuales(sesion, cliente)
             nombres_usuarios = dict(sesion.execute(select(Usuario.id, Usuario.usuario)).all())
 
+            filas_membresias = sesion.execute(
+                select(Membresia, Plan.nombre).join(Plan, Plan.id == Membresia.plan_id)
+                .where(Membresia.cliente_id == cliente.id)
+                .order_by(Membresia.fecha_fin.desc(), Membresia.id.desc())
+            ).all()
+            pagado = saldos_por_membresia(sesion, [m.id for m, _ in filas_membresias])
             membresias = [
                 FilaMembresia(m.id, nombre_plan, m.fecha_inicio, m.fecha_fin, m.precio_pactado,
-                              m.estado, m.motivo_descuento)
-                for m, nombre_plan in sesion.execute(
-                    select(Membresia, Plan.nombre).join(Plan, Plan.id == Membresia.plan_id)
-                    .where(Membresia.cliente_id == cliente.id)
-                    .order_by(Membresia.fecha_fin.desc(), Membresia.id.desc())
-                )
+                              m.estado, m.motivo_descuento, pagado.get(m.id, 0),
+                              m.motivo_anulacion)
+                for m, nombre_plan in filas_membresias
             ]
             vigentes = [m for m in membresias if m.estado == "activa"]
             fecha_fin = vigentes[0].fecha_fin if vigentes else None
@@ -627,7 +643,7 @@ class ServicioClientes:
             pagos = [
                 FilaPago(p.id, p.consecutivo, p.fecha_hora, p.concepto, p.monto, p.metodo,
                          p.referencia, nombres_usuarios.get(p.usuario_id, "—"), p.anulado,
-                         p.motivo_anulacion)
+                         p.motivo_anulacion, p.membresia_id)
                 for p in sesion.scalars(
                     select(Pago).where(Pago.cliente_id == cliente.id)
                     .order_by(Pago.fecha_hora.desc(), Pago.id.desc())

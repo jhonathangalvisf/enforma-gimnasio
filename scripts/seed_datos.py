@@ -54,6 +54,7 @@ DIAS_POR_VENCER = 5
 DIAS_ASISTENCIA = 90  # historial de asistencias generado
 LOTE = 5000
 
+MOTIVO_ANULADA = "Membresía registrada por error"
 PLANES = [
     ("Mensual", 30, 120_000),
     ("Quincenal", 15, 70_000),
@@ -199,6 +200,8 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
             membresias.append(dict(
                 id=id_memb, cliente_id=cid, plan_id=p + 1, fecha_inicio=inicio, fecha_fin=fin,
                 precio_pactado=precio_pactado, estado="anulada" if anulada else "activa",
+                motivo_anulacion=MOTIVO_ANULADA if anulada else None,
+                anulada_por=1 if anulada else None, anulada_en=creado if anulada else None,
                 motivo_descuento="Descuento por referido" if descuento else None,
                 creado_por=1 if descuento else rnd.choice(ids_recepcion), creado_en=creado,
             ))
@@ -216,7 +219,7 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
                     concepto="membresia", monto=monto, metodo=metodo,
                     referencia=None if metodo == "efectivo" else f"{metodo[:3].upper()}-{rnd.randint(100000, 999999)}",
                     fecha_hora=fecha_pago, usuario_id=rnd.choice(ids_recepcion),
-                    anulado=anulada, motivo_anulacion="Membresía registrada por error" if anulada else None,
+                    anulado=anulada, motivo_anulacion=MOTIVO_ANULADA if anulada else None,
                     anulado_por=1 if anulada else None, anulado_en=fecha_pago if anulada else None,
                 ))
             if not anulada:
@@ -224,6 +227,8 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
             # Algunos renuevan con unos días de atraso.
             inicio = fin + timedelta(days=1 if rnd.random() < 0.7 else rnd.randint(2, 20))
     insertar(motor, Membresia, membresias)
+    # El siguiente recibo continúa después del último consecutivo usado.
+    insertar(motor, Config, [dict(clave="recibo_siguiente", valor=str(consecutivo + 1))])
 
     # --- Casilleros ---------------------------------------------------------
     casilleros = []

@@ -21,6 +21,7 @@ from gimnasio.ui.clientes import DialogoElegirCliente, PantallaClientes
 from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
 from gimnasio.ui.configuracion import PantallaConfiguracion
 from gimnasio.ui.dialogos import DialogoCambiarClave
+from gimnasio.ui.pagos import PantallaPagos
 
 INTERVALO_REVISION_MS = 15_000
 
@@ -46,11 +47,11 @@ MODULOS: tuple[Modulo, ...] = (
     Modulo("invitados", "Invitados", Permiso.REGISTRAR_INVITADOS,
            "Registro de invitados y conteo de visitas.", 6),
     Modulo("pagos", "Pagos", Permiso.REGISTRAR_PAGOS,
-           "Membresías, pagos, recibos y cierre de caja.", 3),
+           "Membresías, pagos, recibos y cierre de caja."),
     Modulo("reportes", "Reportes", Permiso.REPORTES_BASICOS,
            "Reportes con filtros, exportación a Excel y PDF.", 7),
     Modulo("configuracion", "Configuración", Permiso.CONFIGURACION,
-           "Parámetros, usuarios y auditoría."),
+           "Parámetros, usuarios, planes y auditoría."),
     Modulo("ayuda", "Ayuda", Permiso.AYUDA,
            "Explicación de cada módulo en lenguaje sencillo (F1).", 8),
 )
@@ -119,6 +120,7 @@ class VentanaPrincipal(QMainWindow):
         self.setCentralWidget(central)
 
         self.pantalla_clientes: PantallaClientes | None = None
+        self.pantalla_pagos: PantallaPagos | None = None
         self.ficha_abierta: DialogoFicha | None = None
         self._indices: dict[str, int] = {}
         for modulo in MODULOS:
@@ -178,6 +180,9 @@ class VentanaPrincipal(QMainWindow):
             self.pantalla_clientes = PantallaClientes(self._servicios, self.actual)
             self.pantalla_clientes.abrir_ficha.connect(self.abrir_ficha)
             return self.pantalla_clientes
+        if modulo.clave == "pagos":
+            self.pantalla_pagos = PantallaPagos(self._servicios, self.actual)
+            return self.pantalla_pagos
         return PantallaProximamente(modulo)
 
     # --- acciones -----------------------------------------------------------
@@ -230,6 +235,8 @@ class VentanaPrincipal(QMainWindow):
         self.ficha_abierta = None
         if dialogo.cambio and getattr(self, "pantalla_clientes", None):
             self.pantalla_clientes.actualizar()
+        if dialogo.cambio and getattr(self, "pantalla_pagos", None):
+            self.pantalla_pagos.actualizar()
 
     def cambiar_clave(self) -> None:
         dialogo = DialogoCambiarClave(self._servicios, self.actual, padre=self)

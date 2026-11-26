@@ -38,6 +38,16 @@ ACCIONES = {
     "cliente_activado": "Cliente activado",
     "casillero_liberado": "Casillero liberado",
     "clientes_exportados": "Lista de clientes exportada",
+    "plan_creado": "Plan creado",
+    "plan_editado": "Plan editado",
+    "plan_activado": "Plan activado",
+    "plan_desactivado": "Plan desactivado",
+    "planes_ejemplo_creados": "Planes de ejemplo creados",
+    "membresia_registrada": "Membresía registrada",
+    "membresia_anulada": "Membresía anulada",
+    "pago_registrado": "Pago registrado",
+    "pago_anulado": "Pago anulado",
+    "recibo_generado": "Recibo generado o reimpreso",
 }
 
 _CAMPOS_PROHIBIDOS = {"clave", "hash_clave", "contrasena", "password"}
