@@ -12,7 +12,7 @@ requires-python = ">=3.12"
 where = ["src"]
 
 [tool.setuptools.package-data]
-gimnasio = ["recursos/*.wav"]
+gimnasio = ["recursos/*.wav", "ayuda/*.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]

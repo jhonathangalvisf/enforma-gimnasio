@@ -143,6 +143,8 @@ class PestanaParametros(QWidget):
 class DialogoUsuario(_DialogoBase):
     """Crear (con contraseña inicial) o editar un usuario."""
 
+    TEMA_AYUDA = "usuarios"
+
     def __init__(self, servicios: Servicios, actual: UsuarioActual,
                  existente: DatosUsuario | None = None, padre: QWidget | None = None):
         super().__init__("Editar usuario" if existente else "Nuevo usuario", "", padre)
@@ -199,6 +201,8 @@ class DialogoUsuario(_DialogoBase):
 
 
 class DialogoClaveTemporal(_DialogoBase):
+    TEMA_AYUDA = "usuarios"
+
     def __init__(self, servicios: Servicios, actual: UsuarioActual, objetivo: DatosUsuario,
                  padre: QWidget | None = None):
         super().__init__(
@@ -556,6 +560,10 @@ class PantallaConfiguracion(QWidget):
         self.pestanas.addTab(self.auditoria, "Auditoría")
         self.pestanas.currentChanged.connect(self._al_cambiar)
         capa.addWidget(self.pestanas)
+
+    def tema_ayuda(self) -> str:
+        """F1: la pestaña Usuarios tiene su propio tema de ayuda."""
+        return "usuarios" if self.pestanas.currentWidget() is self.usuarios else "configuracion"
 
     def _al_cambiar(self, indice: int) -> None:
         if self.pestanas.widget(indice) is self.auditoria:
