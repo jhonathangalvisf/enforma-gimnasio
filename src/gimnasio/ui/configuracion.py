@@ -1,4 +1,4 @@
-"""Pantalla de Configuración (solo administrador): parámetros, usuarios y auditoría."""
+"""Pantalla de Configuración (solo administrador): parámetros, usuarios, planes y auditoría."""
 
 from __future__ import annotations
 
@@ -10,17 +10,19 @@ from PySide6.QtWidgets import (
     QLineEdit, QScrollArea, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from gimnasio.formato import fecha_hora_local
+from gimnasio.formato import fecha_hora_local, pesos
 from gimnasio.servicios.auditoria import ACCIONES
 from gimnasio.servicios.claves import LONGITUD_MINIMA
 from gimnasio.servicios.configuracion import PARAMETROS
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
 from gimnasio.servicios.permisos import ROLES, UsuarioActual
+from gimnasio.servicios.planes import DURACION_MAXIMA, DatosPlan
 from gimnasio.servicios.usuarios import DatosUsuario
 from gimnasio.ui.comunes import boton, celda as _celda, confirmar, etiqueta, mostrar_error
 from gimnasio.ui.comunes import tabla as _tabla
 from gimnasio.ui.dialogos import _DialogoBase, campo_clave
+from gimnasio.ui.pagos import campo_pesos
 
 
 # --- Parámetros -----------------------------------------------------------------
@@ -43,8 +45,6 @@ class PestanaParametros(QWidget):
             if p.tipo == "entero":
                 editor = QSpinBox()
                 editor.setRange(p.minimo, p.maximo)
-                # Sin flechas (se ven mal con el estilo); se escribe o se usan ↑ ↓.
-                editor.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
                 editor.setMaximumWidth(140)
             elif p.tipo == "opcion":
                 editor = QComboBox()
@@ -333,6 +333,133 @@ class PestanaUsuarios(QWidget):
         self.cargar()
 
 
+# --- Planes ---------------------------------------------------------------------
+
+class DialogoPlan(_DialogoBase):
+    def __init__(self, servicios: Servicios, actual: UsuarioActual,
+                 existente: DatosPlan | None = None, padre: QWidget | None = None):
+        super().__init__(
+            "Editar plan" if existente else "Nuevo plan",
+            "Cambiar el precio o la duración no modifica las membresías ya registradas.",
+            padre,
+        )
+        self._servicios, self._actual, self._existente = servicios, actual, existente
+        self.campo_nombre = QLineEdit(existente.nombre if existente else "")
+        self.campo_nombre.setMaxLength(60)
+        self.campo_dias = QSpinBox()
+        self.campo_dias.setRange(1, DURACION_MAXIMA)
+        self.campo_dias.setValue(existente.duracion_dias if existente else 30)
+        self.campo_dias.setSuffix(" días")
+        self.campo_precio = campo_pesos(existente.precio if existente else 0)
+        self.formulario.addRow("Nombre", self.campo_nombre)
+        self.formulario.addRow("Duración", self.campo_dias)
+        self.formulario.addRow("Precio", self.campo_precio)
+        guardar = boton("Guardar", principal=True)
+        cancelar = boton("Cancelar")
+        self._botones.addWidget(cancelar)
+        self._botones.addWidget(guardar)
+        cancelar.clicked.connect(self.reject)
+        guardar.clicked.connect(self.guardar)
+
+    def guardar(self) -> None:
+        argumentos = (self.campo_nombre.text(), self.campo_dias.value(), self.campo_precio.value())
+        try:
+            if self._existente:
+                self._servicios.planes.editar(self._actual, self._existente.id, *argumentos)
+            else:
+                self._servicios.planes.crear(self._actual, *argumentos)
+        except ErrorNegocio as e:
+            self.mostrar_error(str(e))
+            return
+        self.accept()
+
+
+class PestanaPlanes(QWidget):
+    COLUMNAS = ["Plan", "Duración", "Precio", "Estado"]
+
+    def __init__(self, servicios: Servicios, actual: UsuarioActual):
+        super().__init__()
+        self._servicios, self._actual = servicios, actual
+        self._planes: dict[int, DatosPlan] = {}
+        capa = QVBoxLayout(self)
+        barra = QHBoxLayout()
+        self.boton_nuevo = boton("Nuevo plan", principal=True)
+        self.boton_editar = boton("Editar")
+        self.boton_estado = boton("Desactivar")
+        for b in (self.boton_nuevo, self.boton_editar, self.boton_estado):
+            barra.addWidget(b)
+        barra.addStretch()
+        capa.addLayout(barra)
+        capa.addWidget(etiqueta(
+            "Los planes no se eliminan: se desactivan y dejan de ofrecerse. Los planes de "
+            "ejemplo vienen sin precio y desactivados: póngales el precio y actívelos.",
+            "textoSuave",
+        ))
+        self.tabla = _tabla(self.COLUMNAS)
+        self.tabla.horizontalHeader().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
+        capa.addWidget(self.tabla)
+        self.boton_nuevo.clicked.connect(self.nuevo)
+        self.boton_editar.clicked.connect(self.editar)
+        self.boton_estado.clicked.connect(self.cambiar_estado)
+        self.tabla.itemSelectionChanged.connect(self._actualizar_botones)
+        self.tabla.doubleClicked.connect(self.editar)
+        self.cargar()
+
+    def cargar(self) -> None:
+        try:
+            lista = self._servicios.planes.listar(self._actual)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return
+        self._planes = {p.id: p for p in lista}
+        self.tabla.setSortingEnabled(False)
+        self.tabla.setRowCount(len(lista))
+        for fila, p in enumerate(lista):
+            dias = "1 día" if p.duracion_dias == 1 else f"{p.duracion_dias} días"
+            self.tabla.setItem(fila, 0, _celda(p.nombre, p.id))
+            self.tabla.setItem(fila, 1, _celda(dias, orden=p.duracion_dias))
+            self.tabla.setItem(fila, 2, _celda(pesos(p.precio), orden=p.precio))
+            self.tabla.setItem(fila, 3, _celda("Activo" if p.activo else "Inactivo"))
+        self.tabla.setSortingEnabled(True)
+        self._actualizar_botones()
+
+    def seleccionado(self) -> DatosPlan | None:
+        filas = self.tabla.selectionModel().selectedRows()
+        if not filas:
+            return None
+        return self._planes.get(self.tabla.item(filas[0].row(), 0).data(Qt.ItemDataRole.UserRole))
+
+    def _actualizar_botones(self) -> None:
+        p = self.seleccionado()
+        self.boton_editar.setEnabled(p is not None)
+        self.boton_estado.setEnabled(p is not None)
+        self.boton_estado.setText("Activar" if p and not p.activo else "Desactivar")
+
+    def nuevo(self) -> None:
+        if DialogoPlan(self._servicios, self._actual, padre=self).exec() == QDialog.DialogCode.Accepted:
+            self.cargar()
+
+    def editar(self) -> None:
+        p = self.seleccionado()
+        if p and DialogoPlan(self._servicios, self._actual, p, self).exec() == QDialog.DialogCode.Accepted:
+            self.cargar()
+
+    def cambiar_estado(self) -> None:
+        p = self.seleccionado()
+        if not p:
+            return
+        if p.activo is False and p.precio == 0 and not confirmar(
+            self, "Activar plan", f"El plan {p.nombre} tiene precio $ 0. ¿Activarlo así?"
+        ):
+            return
+        try:
+            self._servicios.planes.cambiar_activo(self._actual, p.id, not p.activo)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return
+        self.cargar()
+
+
 # --- Auditoría ------------------------------------------------------------------
 
 class PestanaAuditoria(QWidget):
@@ -421,9 +548,11 @@ class PantallaConfiguracion(QWidget):
         self.pestanas = QTabWidget()
         self.parametros = PestanaParametros(servicios, actual)
         self.usuarios = PestanaUsuarios(servicios, actual)
+        self.planes = PestanaPlanes(servicios, actual)
         self.auditoria = PestanaAuditoria(servicios, actual)
         self.pestanas.addTab(self.parametros, "Parámetros")
         self.pestanas.addTab(self.usuarios, "Usuarios")
+        self.pestanas.addTab(self.planes, "Planes")
         self.pestanas.addTab(self.auditoria, "Auditoría")
         self.pestanas.currentChanged.connect(self._al_cambiar)
         capa.addWidget(self.pestanas)

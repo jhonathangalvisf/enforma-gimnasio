@@ -1,5 +1,39 @@
 # Progreso
 
+## Fase 3 — Planes, membresías y pagos ✅ (26/11/2026)
+
+### Qué se hizo
+- **Migración `0004`**: las membresías guardan motivo, usuario y fecha de anulación (con CHECK que exige el motivo) e índice `ix_pagos_membresia_id` para calcular saldos. Las anuladas previas sin motivo reciben uno genérico.
+- **`servicios/planes.py`**: crear, editar y activar/desactivar planes (solo admin, auditado). No se borran. Nombre único sin importar tildes ni mayúsculas. Editar precio o duración no toca las membresías ya registradas. Al arrancar, si la base no tiene planes, se crean Mensual (30), Quincenal (15), Trimestral (90) y Día (1) **inactivos y con precio $ 0**: el admin pone el precio y los activa.
+- **`servicios/pagos.py`**:
+  - RN-03: `fecha_fin = inicio + días − 1`. RN-04: si el cliente sigue vigente la renovación inicia el día siguiente a su fin; si venció, hoy o la fecha elegida. Nuevo parámetro `renovacion_anticipada` (día siguiente / hoy).
+  - Renovación rápida (`proponer_membresia`): último plan del cliente si sigue activo, fecha de inicio, fin y precio.
+  - Registrar membresía con su primer pago (completo o abono) o sin pago. No se permiten membresías que se crucen (con la política "día siguiente"), ni a clientes inactivos, ni con planes desactivados.
+  - Precio distinto al del plan: solo admin y con motivo (nuevo permiso `APLICAR_DESCUENTOS`). Recepción puede iniciar una membresía hasta 30 días atrás; más atrás, solo el admin. Máximo 90 días adelante.
+  - Pagos: efectivo, tarjeta o transferencia (referencia obligatoria en los dos últimos); conceptos membresía (abono con saldo), casillero u otro (sin membresía). Ningún pago supera el saldo pendiente.
+  - Consecutivo de recibo: el mayor entre el parámetro `recibo_siguiente` y el último usado + 1, en la misma transacción del pago; nunca se repite.
+  - Anular pago (solo admin, motivo obligatorio). Anular membresía (solo admin) anula también sus pagos con el mismo motivo. Todo queda en la auditoría.
+  - Cierre de caja por día de Bogotá: totales por método y por usuario, lista de pagos con los anulados visibles pero sin sumar. Recepción solo ve el suyo de hoy; el admin, cualquier usuario y fecha (permiso `CIERRE_CAJA_GENERAL`).
+  - Saldo pendiente por membresía y por cliente (`saldo_cliente`, para el aviso de Recepción en la Fase 4).
+- **Recibo PDF** (`reportes/recibo.py`, media carta): logo, nombre, NIT, dirección y teléfono del gimnasio; número con prefijo; cliente; concepto con fechas; método y referencia; valor, saldo pendiente justo después de ese pago y quién atendió. Los anulados se reimprimen con marca "ANULADO" y su motivo. Se guardan en `%APPDATA%\Enforma\recibos\` y se abren con el visor de PDF de Windows para imprimir.
+- **Interfaz**: Configuración → pestaña **Planes**; en la ficha del cliente, pestaña Membresías (pagado, saldo, observación) con **Renovar membresía (Ctrl+R)**, registrar abono y anular (admin), y pestaña Pagos con registrar pago (casillero u otro), ver/imprimir recibo y anular (admin); aviso de saldo pendiente en la cabecera. Módulo **Pagos** con el cierre de caja del día.
+- Corregido: los campos numéricos (Configuración → Parámetros) se veían vacíos porque `setButtonSymbols(NoButtons)` no dibuja el texto con la hoja de estilos; ahora las flechas se ocultan desde el estilo.
+- 50 pruebas nuevas (207 en total): fechas RN-03/RN-04 (bisiesto, cambio de año, plan de un día), descuentos y permisos, abonos y saldos, consecutivo, anulaciones, cierre de caja por día y usuario, recibo PDF, migración 0004 y pantallas.
+
+### Resultados medidos (base de prueba con 12.000 clientes)
+- Cierre de caja de un día con ~290 pagos: 6,5 ms. Ficha con saldos: 4 ms. Propuesta de renovación: 2 ms.
+
+### Decisiones (aprobadas por el dueño)
+- Congelamientos o pausas de membresía: fuera por ahora.
+- Abonos permitidos. Un cliente con saldo puede entrar; Recepción mostrará un aviso amarillo (Fase 4).
+- Recibo con consecutivo propio y NIT si está configurado; no es factura electrónica.
+- El número del recibo se arma con el prefijo **actual**: si se cambia el prefijo, los recibos viejos se reimprimen con el nuevo.
+
+### Pendientes / para fases siguientes
+- Fase 4: botón de renovación desde la alerta roja de Recepción (ya existe `DialogoMembresia`) y aviso de saldo pendiente.
+- Fase 5: si el casillero tiene cobro propio, usar el concepto "casillero" que ya existe.
+- Fase 7: exportar el cierre de caja a Excel/PDF.
+
 ## Fase 2 — Clientes ✅ (26/11/2026)
 
 ### Qué se hizo

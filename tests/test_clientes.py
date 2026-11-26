@@ -57,7 +57,8 @@ def membresia(fabrica, cliente_id, inicio, fin, estado="activa", plan="Mensual")
             s.add(p)
             s.flush()
         s.add(Membresia(cliente_id=cliente_id, plan_id=p.id, fecha_inicio=inicio,
-                        fecha_fin=fin, precio_pactado=120_000, estado=estado))
+                        fecha_fin=fin, precio_pactado=120_000, estado=estado,
+                        motivo_anulacion="Prueba" if estado == "anulada" else None))
         s.commit()
         return p.id
 

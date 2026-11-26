@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog, QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QMessageBox,
     QTabWidget, QVBoxLayout, QWidget,
@@ -18,7 +18,8 @@ from gimnasio.servicios.clientes import (
     ESTADOS, SEXOS, TIPOS_DOCUMENTO, ErrorCasilleroAsignado, FichaCliente,
 )
 from gimnasio.servicios.contenedor import Servicios
-from gimnasio.servicios.errores import ErrorNegocio
+from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
+from gimnasio.servicios.pagos import CONCEPTOS, METODOS, numero_recibo
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
 from gimnasio.ui.clientes import COLOR_VIGENCIA, texto_vigencia
 from gimnasio.ui.comunes import boton, celda, etiqueta, mostrar_error, tabla
@@ -27,10 +28,10 @@ RESULTADOS = {
     "permitido": "Permitido", "por_vencer": "Por vencer", "vencido": "Vencido",
     "inactivo": "Inactivo", "autorizado": "Autorizado por admin",
 }
-CONCEPTOS = {"membresia": "Membresía", "casillero": "Casillero", "otro": "Otro"}
-METODOS = {"efectivo": "Efectivo", "tarjeta": "Tarjeta", "transferencia": "Transferencia"}
 NIVELES = {"info": "Información", "advertencia": "Advertencia", "critica": "Crítica"}
 ZONAS = {"hombres": "Hombres", "mujeres": "Mujeres", "mixto": "Mixto"}
+
+PESTANA_MEMBRESIAS, PESTANA_PAGOS = 2, 3
 
 # Decisión al inactivar un cliente con casillero.
 LIBERAR, CONSERVAR, CANCELAR = "liberar", "conservar", "cancelar"
@@ -103,20 +104,28 @@ def _formulario(filas: list[tuple[str, str]]) -> QWidget:
     return contenedor
 
 
-def _tabla_con(columnas: list[str], filas: list[list], vacio: str) -> QWidget:
+def _tabla_con(columnas: list[str], filas: list[list], vacio: str,
+               datos: list | None = None, botones: QHBoxLayout | None = None) -> QWidget:
+    """Tabla de solo lectura. `datos` guarda un identificador por fila (columna 0)."""
     contenedor = QWidget()
     capa = QVBoxLayout(contenedor)
     capa.setContentsMargins(8, 8, 8, 8)
+    if botones is not None:
+        capa.addLayout(botones)
     if not filas:
         capa.addWidget(etiqueta(vacio, "textoSuave"))
         capa.addStretch()
         return contenedor
     t = tabla(columnas)
+    contenedor.tabla = t
     t.setSortingEnabled(False)
     t.setRowCount(len(filas))
     for i, fila in enumerate(filas):
         for j, valor in enumerate(fila):
-            t.setItem(i, j, valor if not isinstance(valor, str) else celda(valor))
+            item = valor if not isinstance(valor, str) else celda(valor)
+            if j == 0 and datos is not None:
+                item.setData(Qt.ItemDataRole.UserRole, datos[i])
+            t.setItem(i, j, item)
     # Se conserva el orden del servicio (lo más reciente primero) hasta que el
     # usuario haga clic en una columna.
     t.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
@@ -133,6 +142,12 @@ class DialogoFicha(QDialog):
         self._actual = actual
         self._cliente_id = cliente_id
         self.cambio = False  # True si se modificó algo (para refrescar la lista)
+        # Se pueden reemplazar en las pruebas para no abrir ventanas del sistema.
+        from gimnasio.ui.pagos import abrir_archivo, pedir_motivo
+
+        self.abrir = abrir_archivo
+        self.pedir_motivo = pedir_motivo
+        QShortcut(QKeySequence("Ctrl+R"), self, activated=self.renovar)
         self.setMinimumSize(900, 640)
         self._capa = QVBoxLayout(self)
         self._capa.setContentsMargins(24, 20, 24, 20)
@@ -185,6 +200,10 @@ class DialogoFicha(QDialog):
         if not f.activo:
             self.etiqueta_estado.setStyleSheet("color: #b42318; font-weight: 600;")
         datos.addWidget(self.etiqueta_estado)
+        if f.saldo_pendiente:
+            self.etiqueta_saldo = etiqueta(f"⚠ Saldo pendiente: {pesos(f.saldo_pendiente)}")
+            self.etiqueta_saldo.setStyleSheet("color: #b54708; font-weight: 600;")
+            datos.addWidget(self.etiqueta_saldo)
         extra = [f"Casillero: {f.casillero}" if f.casillero else "Sin casillero"]
         if f.cumple_hoy:
             extra.append("🎂 ¡Hoy cumple años!")
@@ -224,25 +243,8 @@ class DialogoFicha(QDialog):
             *[(f"Emergencia {i}", f"{e.nombre} — {e.telefono}")
               for i, e in enumerate(f.emergencias, start=1)],
         ]), "Contactos")
-        self.pestanas.addTab(_tabla_con(
-            ["Plan", "Inicio", "Fin", "Precio pactado", "Estado", "Motivo de descuento"],
-            [[m.plan, celda(fecha(m.fecha_inicio), orden=m.fecha_inicio),
-              celda(fecha(m.fecha_fin), orden=m.fecha_fin),
-              celda(pesos(m.precio_pactado), orden=m.precio_pactado),
-              "Anulada" if m.estado == "anulada" else "Activa", m.motivo_descuento or ""]
-             for m in f.membresias],
-            "No tiene membresías registradas. El registro de membresías llega en la Fase 3.",
-        ), f"Membresías ({len(f.membresias)})")
-        self.pestanas.addTab(_tabla_con(
-            ["Recibo", "Fecha", "Concepto", "Monto", "Método", "Referencia", "Usuario", "Estado"],
-            [[celda(str(p.consecutivo), orden=p.consecutivo),
-              celda(fecha_hora_local(p.fecha_hora), orden=p.fecha_hora),
-              CONCEPTOS.get(p.concepto, p.concepto), celda(pesos(p.monto), orden=p.monto),
-              METODOS.get(p.metodo, p.metodo), p.referencia or "", p.usuario,
-              f"Anulado: {p.motivo_anulacion}" if p.anulado else "Válido"]
-             for p in f.pagos],
-            "No tiene pagos registrados. El registro de pagos llega en la Fase 3.",
-        ), f"Pagos ({len(f.pagos)})")
+        self.pestanas.addTab(self._pestana_membresias(f), f"Membresías ({len(f.membresias)})")
+        self.pestanas.addTab(self._pestana_pagos(f), f"Pagos ({len(f.pagos)})")
         self.pestanas.addTab(_tabla_con(
             ["Fecha y hora", "Resultado", "Casillero", "Registró"],
             [[celda(fecha_hora_local(a.fecha_hora), orden=a.fecha_hora),
@@ -274,6 +276,81 @@ class DialogoFicha(QDialog):
              for a in f.alertas],
             "No tiene alertas. Las alertas manuales se crean desde Recepción (Fase 4).",
         ), f"Alertas ({activas})")
+
+    def _pestana_membresias(self, f: FichaCliente) -> QWidget:
+        barra = QHBoxLayout()
+        self.boton_renovar = boton("Renovar membresía (Ctrl+R)", principal=True)
+        self.boton_abono = boton("Registrar abono…")
+        barra.addWidget(self.boton_renovar)
+        barra.addWidget(self.boton_abono)
+        self.boton_anular_membresia = None
+        if self._actual.puede(Permiso.ANULAR_PAGOS):
+            self.boton_anular_membresia = boton("Anular membresía…")
+            self.boton_anular_membresia.clicked.connect(self.anular_membresia)
+            barra.addWidget(self.boton_anular_membresia)
+        barra.addStretch()
+        self.boton_renovar.clicked.connect(self.renovar)
+        self.boton_abono.clicked.connect(self.registrar_abono)
+        self.boton_renovar.setEnabled(self._actual.puede(Permiso.REGISTRAR_PAGOS) and f.activo)
+        if not f.activo:
+            self.boton_renovar.setToolTip("El cliente está inactivo.")
+        pestana = _tabla_con(
+            ["Plan", "Inicio", "Fin", "Precio pactado", "Pagado", "Saldo", "Estado", "Observación"],
+            [[m.plan, celda(fecha(m.fecha_inicio), orden=m.fecha_inicio),
+              celda(fecha(m.fecha_fin), orden=m.fecha_fin),
+              celda(pesos(m.precio_pactado), orden=m.precio_pactado),
+              celda(pesos(m.pagado), orden=m.pagado), celda(pesos(m.saldo), orden=m.saldo),
+              "Anulada" if m.estado == "anulada" else "Activa",
+              (f"Anulada: {m.motivo_anulacion}" if m.estado == "anulada"
+               else f"Descuento: {m.motivo_descuento}" if m.motivo_descuento else "")]
+             for m in f.membresias],
+            "No tiene membresías registradas. Use «Renovar membresía» para registrar la primera.",
+            datos=[m.id for m in f.membresias], botones=barra,
+        )
+        self.tabla_membresias = getattr(pestana, "tabla", None)
+        return pestana
+
+    def _pestana_pagos(self, f: FichaCliente) -> QWidget:
+        barra = QHBoxLayout()
+        self.boton_pago = boton("Registrar pago (casillero u otro)…")
+        self.boton_recibo = boton("Ver / imprimir recibo")
+        barra.addWidget(self.boton_pago)
+        barra.addWidget(self.boton_recibo)
+        self.boton_anular_pago = None
+        if self._actual.puede(Permiso.ANULAR_PAGOS):
+            self.boton_anular_pago = boton("Anular pago…")
+            self.boton_anular_pago.clicked.connect(self.anular_pago)
+            barra.addWidget(self.boton_anular_pago)
+        barra.addStretch()
+        self.boton_pago.clicked.connect(self.registrar_pago)
+        self.boton_recibo.clicked.connect(self.ver_recibo)
+        prefijo = self._servicios.configuracion.obtener("recibo_prefijo")
+        pestana = _tabla_con(
+            ["Recibo", "Fecha", "Concepto", "Monto", "Método", "Referencia", "Usuario", "Estado"],
+            [[celda(numero_recibo(prefijo, p.consecutivo), orden=p.consecutivo),
+              celda(fecha_hora_local(p.fecha_hora), orden=p.fecha_hora),
+              CONCEPTOS.get(p.concepto, p.concepto), celda(pesos(p.monto), orden=p.monto),
+              METODOS.get(p.metodo, p.metodo), p.referencia or "", p.usuario,
+              f"Anulado: {p.motivo_anulacion}" if p.anulado else "Válido"]
+             for p in f.pagos],
+            "No tiene pagos registrados.",
+            datos=[p.id for p in f.pagos], botones=barra,
+        )
+        self.tabla_pagos = getattr(pestana, "tabla", None)
+        return pestana
+
+    @staticmethod
+    def _id_seleccionado(t) -> int | None:
+        if t is None:
+            return None
+        filas = t.selectionModel().selectedRows()
+        if not filas:
+            return None
+        return t.item(filas[0].row(), 0).data(Qt.ItemDataRole.UserRole)
+
+    def membresia_seleccionada(self):
+        mid = self._id_seleccionado(self.tabla_membresias)
+        return next((m for m in self.ficha.membresias if m.id == mid), None)
 
     def _botones(self, f: FichaCliente) -> QHBoxLayout:
         fila = QHBoxLayout()
@@ -321,3 +398,94 @@ class DialogoFicha(QDialog):
         if cambiar_estado(self, self._servicios, self._actual, self._cliente_id):
             self.cambio = True
             self.cargar()
+
+    # --- membresías y pagos ---------------------------------------------------
+    def _recargar_en(self, indice: int) -> None:
+        self.cambio = True
+        self.cargar()
+        self.pestanas.setCurrentIndex(indice)
+
+    def renovar(self) -> None:
+        if not self.boton_renovar.isEnabled():
+            return
+        from gimnasio.ui.pagos import DialogoMembresia
+
+        try:
+            dialogo = DialogoMembresia(self._servicios, self._actual, self._cliente_id,
+                                       self.ficha.nombre_completo, padre=self)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return
+        dialogo.abrir = self.abrir
+        if dialogo.exec():
+            self._recargar_en(PESTANA_MEMBRESIAS)
+
+    def registrar_abono(self) -> None:
+        from gimnasio.ui.pagos import DialogoPago
+
+        m = self.membresia_seleccionada()
+        if m is None:
+            m = next((x for x in self.ficha.membresias if x.saldo > 0), None)
+        if m is None or m.saldo <= 0:
+            mostrar_error(self, ErrorValidacion(
+                "Seleccione una membresía activa con saldo pendiente."))
+            return
+        dialogo = DialogoPago(self._servicios, self._actual, self._cliente_id, m,
+                              self.ficha.nombre_completo, padre=self)
+        dialogo.abrir = self.abrir
+        if dialogo.exec():
+            self._recargar_en(PESTANA_MEMBRESIAS)
+
+    def registrar_pago(self) -> None:
+        from gimnasio.ui.pagos import DialogoPago
+
+        dialogo = DialogoPago(self._servicios, self._actual, self._cliente_id,
+                              nombre_cliente=self.ficha.nombre_completo, padre=self)
+        dialogo.abrir = self.abrir
+        if dialogo.exec():
+            self._recargar_en(PESTANA_PAGOS)
+
+    def ver_recibo(self) -> None:
+        from gimnasio.ui.pagos import abrir_recibo
+
+        pago_id = self._id_seleccionado(self.tabla_pagos)
+        if pago_id is None:
+            mostrar_error(self, ErrorValidacion("Seleccione un pago de la lista."))
+            return
+        abrir_recibo(self, self._servicios, self._actual, pago_id, self.abrir)
+
+    def anular_pago(self) -> None:
+        pago_id = self._id_seleccionado(self.tabla_pagos)
+        pago = next((p for p in self.ficha.pagos if p.id == pago_id), None)
+        if pago is None:
+            mostrar_error(self, ErrorValidacion("Seleccione un pago de la lista."))
+            return
+        motivo = self.pedir_motivo(self, "Anular pago",
+                                   f"Motivo para anular el pago de {pesos(pago.monto)} "
+                                   "(queda en la auditoría):")
+        if motivo is None:
+            return
+        try:
+            self._servicios.pagos.anular_pago(self._actual, pago.id, motivo)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return
+        self._recargar_en(PESTANA_PAGOS)
+
+    def anular_membresia(self) -> None:
+        m = self.membresia_seleccionada()
+        if m is None:
+            mostrar_error(self, ErrorValidacion("Seleccione una membresía de la lista."))
+            return
+        motivo = self.pedir_motivo(
+            self, "Anular membresía",
+            f"Motivo para anular la membresía {m.plan} del {fecha(m.fecha_inicio)} al "
+            f"{fecha(m.fecha_fin)}. También se anulan sus pagos ({pesos(m.pagado)}):")
+        if motivo is None:
+            return
+        try:
+            self._servicios.pagos.anular_membresia(self._actual, m.id, motivo)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return
+        self._recargar_en(PESTANA_MEMBRESIAS)

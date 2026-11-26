@@ -11,6 +11,8 @@ from gimnasio.modelos import ahora_utc
 from gimnasio.servicios.auditoria import ServicioAuditoria
 from gimnasio.servicios.clientes import ServicioClientes
 from gimnasio.servicios.configuracion import ServicioConfiguracion
+from gimnasio.servicios.pagos import ServicioPagos
+from gimnasio.servicios.planes import ServicioPlanes
 from gimnasio.servicios.sesion import Reloj, ServicioSesion
 from gimnasio.servicios.usuarios import ServicioUsuarios
 
@@ -22,6 +24,8 @@ class Servicios:
     usuarios: ServicioUsuarios
     auditoria: ServicioAuditoria
     clientes: ServicioClientes
+    planes: ServicioPlanes
+    pagos: ServicioPagos
 
 
 def crear_servicios(
@@ -34,4 +38,6 @@ def crear_servicios(
         usuarios=ServicioUsuarios(fabrica),
         auditoria=ServicioAuditoria(fabrica),
         clientes=ServicioClientes(fabrica, configuracion, carpeta_datos, reloj),
+        planes=ServicioPlanes(fabrica),
+        pagos=ServicioPagos(fabrica, configuracion, carpeta_datos, reloj),
     )

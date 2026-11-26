@@ -24,7 +24,9 @@ class Permiso(str, Enum):
     MODIFICAR_CLIENTE_COMPLETO = "modificar_cliente_completo"
     ACTIVAR_CLIENTES = "activar_clientes"
     REGISTRAR_PAGOS = "registrar_pagos"
-    ANULAR_PAGOS = "anular_pagos"
+    ANULAR_PAGOS = "anular_pagos"  # también anular membresías
+    APLICAR_DESCUENTOS = "aplicar_descuentos"  # precio pactado distinto al del plan
+    CIERRE_CAJA_GENERAL = "cierre_caja_general"  # ver la caja de todos y de cualquier día
     ELIMINAR_ASISTENCIA_DEL_DIA = "eliminar_asistencia_del_dia"
     ELIMINAR_ASISTENCIA_CUALQUIERA = "eliminar_asistencia_cualquiera"
     ASIGNAR_CASILLERO = "asignar_casillero"
