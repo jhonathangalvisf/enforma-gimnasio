@@ -1,5 +1,45 @@
 # Progreso
 
+## Fase 7 — Reportes ✅ (26/11/2026)
+
+### Qué se hizo
+- **`servicios/reportes.py`**: catálogo único de 27 reportes en 5 grupos. Cada reporte declara si Recepción puede abrirlo; el servicio lo valida (y los servicios de cada módulo mantienen sus límites de "solo hoy").
+  - **Clientes:** por vencer en los próximos N días (con teléfono, saldo y casillero), vencidos (con días de vencido; N = últimos N días, 0 = todos), morosos (cada membresía con saldo, con totales), resumen mensual de nuevos, renovaciones y bajas, y el detalle de nuevos, renovaciones y bajas.
+  - **Ingresos:** detalle de pagos, por día, por método, por usuario y por plan (con filtros de método, usuario, concepto y plan), pagos anulados (quién y por qué) y cierre de caja. Los anulados no suman y se indican en el encabezado.
+  - **Asistencia, casilleros e invitados:** reutilizan los reportes de las Fases 4, 5 y 6 (del día, rango, cliente, franja, ranking, ausentes; lista, vencidos, sugeridos para liberar, por día; visitas, por invitado, por anfitrión).
+  - Exportar a Excel y PDF queda en la auditoría (`reporte_exportado`, con reporte, formato y filas).
+- **Exportación** (`reportes/exportar.py`): título, filtros y fecha de generación arriba (Excel también), fila de totales en negrita, columnas de dinero como `$ 1.234.567` (en Excel siguen siendo números), números con separador de miles. Los nombres de hoja con caracteres no permitidos se limpian.
+- **Pantalla Reportes** (`ui/reportes.py`): lista por grupos a la izquierda, filtros que cambian según el reporte, periodos rápidos (este mes, mes anterior, últimos 30 días, últimos 12 meses, este año, hoy), Enter genera, vista previa con totales abajo, Excel, PDF e Imprimir (Ctrl+P, abre el PDF). La vista previa muestra hasta 2.000 filas; Excel y PDF llevan todas.
+- `scripts/seed_datos.py` registra en la auditoría la inactivación de los clientes inactivos (el reporte de bajas la lee de ahí).
+- `scripts/medir_reportes.py`: mide cada reporte con un mes y con un año.
+- 34 pruebas nuevas (358 en total): permisos de Recepción en el servicio, límites de "solo hoy", cada reporte con datos conocidos, filtros, anulados, exportación con totales y formato de pesos, y la pantalla.
+
+### Resultados medidos (base de prueba: 12.000 clientes, 95.000 membresías, 100.000 pagos)
+| Reporte | Un mes | Un año |
+|---|---:|---:|
+| Clientes por vencer / vencidos / morosos | 84 / 99 / 146 ms | — |
+| Nuevos, renovaciones y bajas por mes | 53 ms | 227 ms |
+| Ingresos por día, método o usuario | 18 ms | ~210 ms |
+| Ingresos por plan | 29 ms | 362 ms |
+| Detalle de pagos (7.116 / 86.904 filas) | 177 ms | 1,8 s |
+| Renovaciones detalle (6.495 / 79.186 filas) | 209 ms | 1,1 s |
+| Cierre de caja | 8 ms | — |
+
+Los reportes de un mes están en la meta de 200 ms o muy cerca. Los de un año con resumen tardan 0,2 a 0,4 s, y los de detalle con decenas de miles de filas 1 a 2 s (traer tantas filas toma ese tiempo). Los resúmenes de ingresos suman en la base y solo unen las tablas que necesitan (bajaron de ~1,1 s a ~0,2 s por año). La asistencia por rango de un año (230.000 filas, Fase 4) tarda varios segundos; la vista previa se limita para que la pantalla no se trabe.
+
+### Decisiones
+- **Bajas** (confirmado por el dueño): se cuentan por separado los clientes **inactivados** por el administrador (fecha y motivo desde la auditoría) y los clientes **activos que se vencieron y no renovaron** (mes en que terminó su última membresía). Si un cliente renueva, deja de contar como baja.
+- **Renovación:** una membresía no anulada que no es la primera del cliente, contada en la fecha en que se vendió. **Nuevo:** cliente registrado en el periodo.
+- **Recepción** (confirmado por el dueño) ve: asistencia de hoy, casilleros (todas las listas), visitas de invitados de hoy, su propio cierre de caja de hoy y **clientes por vencer con teléfono**. Ingresos, morosos, vencidos, movimientos de clientes y los demás, solo el administrador.
+- Por vencer y vencidos solo incluyen clientes activos; morosos incluye inactivos (con la columna Estado).
+- "Imprimir" genera el PDF y lo abre con el programa predeterminado de Windows, igual que en las fases anteriores.
+- Sin cambios de tablas: no hay migración nueva.
+- Capturas en `/mnt/project-files/fase7/`.
+
+### Pendientes / para fases siguientes
+- Fase 8 (Ayuda): texto de ayuda del módulo Reportes.
+- Si se necesitan reportes anuales de detalle más rápidos, agregar un índice que cubra los pagos (requiere migración).
+
 ## Fase 6 — Invitados ✅ (26/11/2026)
 
 ### Qué se hizo

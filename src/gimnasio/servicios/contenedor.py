@@ -17,6 +17,7 @@ from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.invitados import ServicioInvitados
 from gimnasio.servicios.pagos import ServicioPagos
 from gimnasio.servicios.planes import ServicioPlanes
+from gimnasio.servicios.reportes import ServicioReportes
 from gimnasio.servicios.sesion import Reloj, ServicioSesion
 from gimnasio.servicios.usuarios import ServicioUsuarios
 
@@ -34,6 +35,7 @@ class Servicios:
     alertas: ServicioAlertas
     casilleros: ServicioCasilleros
     invitados: ServicioInvitados
+    reportes: ServicioReportes
 
 
 def crear_servicios(
@@ -42,6 +44,9 @@ def crear_servicios(
     configuracion = ServicioConfiguracion(fabrica, carpeta_datos)
     sesion = ServicioSesion(fabrica, configuracion, reloj)
     pagos = ServicioPagos(fabrica, configuracion, carpeta_datos, reloj)
+    asistencia = ServicioAsistencia(fabrica, configuracion, sesion, carpeta_datos, reloj)
+    casilleros = ServicioCasilleros(fabrica, configuracion, pagos, carpeta_datos, reloj)
+    invitados = ServicioInvitados(fabrica, configuracion, sesion, carpeta_datos, reloj)
     return Servicios(
         configuracion=configuracion,
         sesion=sesion,
@@ -50,8 +55,10 @@ def crear_servicios(
         clientes=ServicioClientes(fabrica, configuracion, carpeta_datos, reloj),
         planes=ServicioPlanes(fabrica),
         pagos=pagos,
-        asistencia=ServicioAsistencia(fabrica, configuracion, sesion, carpeta_datos, reloj),
+        asistencia=asistencia,
         alertas=ServicioAlertas(fabrica, reloj),
-        casilleros=ServicioCasilleros(fabrica, configuracion, pagos, carpeta_datos, reloj),
-        invitados=ServicioInvitados(fabrica, configuracion, sesion, carpeta_datos, reloj),
+        casilleros=casilleros,
+        invitados=invitados,
+        reportes=ServicioReportes(fabrica, configuracion, pagos, asistencia, casilleros,
+                                  invitados, carpeta_datos, reloj),
     )
