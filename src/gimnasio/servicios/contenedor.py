@@ -17,6 +17,7 @@ from gimnasio.servicios.auditoria import ServicioAuditoria
 from gimnasio.servicios.casilleros import ServicioCasilleros
 from gimnasio.servicios.clientes import ServicioClientes
 from gimnasio.servicios.configuracion import ServicioConfiguracion
+from gimnasio.servicios.depuracion import ServicioDepuracion
 from gimnasio.servicios.invitados import ServicioInvitados
 from gimnasio.servicios.pagos import ServicioPagos
 from gimnasio.servicios.planes import ServicioPlanes
@@ -41,6 +42,7 @@ class Servicios:
     reportes: ServicioReportes
     ayuda: ServicioAyuda
     backups: ServicioBackups
+    depuracion: ServicioDepuracion
 
 
 def crear_servicios(
@@ -54,6 +56,7 @@ def crear_servicios(
     asistencia = ServicioAsistencia(fabrica, configuracion, sesion, carpeta_datos, reloj)
     casilleros = ServicioCasilleros(fabrica, configuracion, pagos, carpeta_datos, reloj)
     invitados = ServicioInvitados(fabrica, configuracion, sesion, carpeta_datos, reloj)
+    backups = ServicioBackups(fabrica, configuracion, carpeta_datos, reloj, protector_clave)
     return Servicios(
         configuracion=configuracion,
         sesion=sesion,
@@ -69,5 +72,8 @@ def crear_servicios(
         reportes=ServicioReportes(fabrica, configuracion, pagos, asistencia, casilleros,
                                   invitados, carpeta_datos, reloj),
         ayuda=ServicioAyuda(),
-        backups=ServicioBackups(fabrica, configuracion, carpeta_datos, reloj, protector_clave),
+        backups=backups,
+        depuracion=ServicioDepuracion(
+            fabrica, configuracion, lambda actual: backups.hacer_backup(actual),
+            carpeta_datos, reloj),
     )
