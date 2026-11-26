@@ -122,7 +122,7 @@ Asistencia (3.5), casilleros (3.6), invitados (3.7) y además:
 - RN-04 **Renovación anticipada:** si el cliente aún está vigente, la nueva membresía inicia el día siguiente a la `fecha_fin` actual (configurable). Si ya está vencido, inicia hoy o en la fecha que se elija.
 - RN-05 **Cliente inactivo** no puede ingresar, aunque tenga membresía vigente.
 - RN-06 **Casilleros:** un cliente ↔ un casillero activo, reforzado por índices únicos parciales (ver 5).
-- RN-07 **Nada financiero se borra:** pagos y membresías se anulan con motivo.
+- RN-07 **Nada financiero se borra:** pagos y membresías se anulan con motivo. *Única excepción (aprobada por el dueño):* el administrador puede borrar pagos antiguos hasta una fecha, con clave de seguridad, copia cifrada y Excel previos y registro en la auditoría; nunca la última membresía de un cliente ni la numeración de recibos.
 - RN-08 **Asistencias** se eliminan de forma lógica y quedan auditadas.
 - RN-09 **Clientes y usuarios no se eliminan**, solo se inactivan.
 - RN-10 **Invitado:** el documento identifica a la persona; las visitas se cuentan desde `invitado_asistencias` (no se guarda un contador, se calcula).

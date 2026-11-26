@@ -232,6 +232,67 @@ def _validar_pago(datos: DatosPago) -> DatosPago:
     return DatosPago(monto, datos.metodo, referencia)
 
 
+# --- consultas de pagos (por cliente y por fecha de pago) ----------------------------
+
+LIMITE_CONSULTA = 5000
+
+
+@dataclass(frozen=True)
+class FiltrosPagos:
+    """Fechas en días de Bogotá, incluidas. None = sin límite por ese lado."""
+
+    cliente_id: int | None = None
+    desde: date | None = None
+    hasta: date | None = None
+    metodo: str | None = None
+    concepto: str | None = None
+    usuario_id: int | None = None
+    incluir_anulados: bool = True
+
+
+@dataclass(frozen=True)
+class FilaConsultaPago:
+    pago_id: int
+    recibo: str
+    fecha_hora: datetime  # UTC
+    cliente_codigo: str
+    cliente_nombre: str
+    concepto: str
+    detalle: str  # plan y período de la membresía, si aplica
+    metodo: str
+    referencia: str
+    monto: int
+    usuario: str
+    anulado: bool
+    motivo_anulacion: str
+
+
+@dataclass(frozen=True)
+class ConsultaPagos:
+    filas: list[FilaConsultaPago]
+    total: int  # solo pagos válidos
+    cantidad: int
+    anulados_cantidad: int
+    anulados_monto: int
+    truncada: bool  # hay más pagos que el límite mostrado
+
+
+ENCABEZADOS_CONSULTA = ("Fecha y hora", "Recibo", "Código", "Cliente", "Concepto", "Detalle",
+                        "Método", "Referencia", "Registró", "Estado", "Monto")
+
+
+def filas_exportables(consulta: ConsultaPagos) -> list[tuple]:
+    from gimnasio.formato import fecha_hora_local
+
+    return [
+        (fecha_hora_local(f.fecha_hora), f.recibo, f.cliente_codigo, f.cliente_nombre,
+         CONCEPTOS[f.concepto], f.detalle, METODOS[f.metodo], f.referencia, f.usuario,
+         f"Anulado: {f.motivo_anulacion}" if f.anulado else "Válido",
+         0 if f.anulado else f.monto)
+        for f in consulta.filas
+    ]
+
+
 # --- servicio -------------------------------------------------------------------------
 
 class ServicioPagos:
@@ -642,6 +703,116 @@ class ServicioPagos:
             sesion.commit()
         return destino
 
+    # --- consultas -------------------------------------------------------------------
+
+    def consultar_pagos(self, actual: UsuarioActual, filtros: FiltrosPagos,
+                        limite: int = LIMITE_CONSULTA) -> ConsultaPagos:
+        """Pagos por cliente y/o por fecha de pago, del más reciente al más antiguo.
+
+        El administrador consulta todo; Recepción solo los pagos de un cliente puntual.
+        """
+        exigir(actual, Permiso.REGISTRAR_PAGOS)
+        if filtros.cliente_id is None and not actual.puede(Permiso.REPORTES_TODOS):
+            raise ErrorPermiso("Recepción solo puede consultar los pagos de un cliente. Elija el cliente.")
+        if filtros.desde and filtros.hasta and filtros.desde > filtros.hasta:
+            raise ErrorValidacion("La fecha inicial no puede ser posterior a la final.")
+        if filtros.metodo and filtros.metodo not in METODOS:
+            raise ErrorValidacion("Método de pago no válido.")
+        if filtros.concepto and filtros.concepto not in CONCEPTOS:
+            raise ErrorValidacion("Concepto no válido.")
+        condiciones = []
+        if filtros.cliente_id is not None:
+            condiciones.append(Pago.cliente_id == filtros.cliente_id)
+        if filtros.desde:
+            condiciones.append(Pago.fecha_hora >= inicio_dia_utc(filtros.desde))
+        if filtros.hasta:
+            condiciones.append(Pago.fecha_hora < inicio_dia_utc(filtros.hasta + timedelta(days=1)))
+        if filtros.metodo:
+            condiciones.append(Pago.metodo == filtros.metodo)
+        if filtros.concepto:
+            condiciones.append(Pago.concepto == filtros.concepto)
+        if filtros.usuario_id:
+            condiciones.append(Pago.usuario_id == filtros.usuario_id)
+        with self._fabrica() as sesion:
+            usuario_vigente(sesion, actual)
+            prefijo = self._configuracion.obtener("recibo_prefijo", sesion)
+            totales = {
+                bool(anulado): (cantidad, suma)
+                for anulado, cantidad, suma in sesion.execute(
+                    select(Pago.anulado, func.count(Pago.id), func.coalesce(func.sum(Pago.monto), 0))
+                    .where(*condiciones).group_by(Pago.anulado))
+            }
+            if not filtros.incluir_anulados:
+                condiciones.append(Pago.anulado.is_(False))
+            consulta = (
+                select(Pago, Cliente.codigo, Cliente.nombres, Cliente.apellidos, Usuario.usuario,
+                       Plan.nombre, Membresia.fecha_inicio, Membresia.fecha_fin)
+                .join(Cliente, Cliente.id == Pago.cliente_id)
+                .join(Usuario, Usuario.id == Pago.usuario_id)
+                .outerjoin(Membresia, Membresia.id == Pago.membresia_id)
+                .outerjoin(Plan, Plan.id == Membresia.plan_id)
+                .where(*condiciones)
+                .order_by(Pago.fecha_hora.desc(), Pago.id.desc())
+                .limit(limite + 1)
+            )
+            filas = []
+            for p, codigo, nombres, apellidos, usuario, plan, inicio, fin in sesion.execute(consulta):
+                detalle = (f"{plan}: {formato_fecha(inicio)} al {formato_fecha(fin)}"
+                           if plan else "")
+                filas.append(FilaConsultaPago(
+                    pago_id=p.id, recibo=numero_recibo(prefijo, p.consecutivo),
+                    fecha_hora=p.fecha_hora, cliente_codigo=codigo,
+                    cliente_nombre=f"{nombres} {apellidos}", concepto=p.concepto, detalle=detalle,
+                    metodo=p.metodo, referencia=p.referencia or "", monto=p.monto,
+                    usuario=usuario, anulado=p.anulado, motivo_anulacion=p.motivo_anulacion or "",
+                ))
+        validos = totales.get(False, (0, 0))
+        anulados = totales.get(True, (0, 0))
+        return ConsultaPagos(
+            filas=filas[:limite], total=int(validos[1]), cantidad=int(validos[0]),
+            anulados_cantidad=int(anulados[0]), anulados_monto=int(anulados[1]),
+            truncada=len(filas) > limite,
+        )
+
+    def exportar_consulta(self, actual: UsuarioActual, filtros: FiltrosPagos,
+                           ruta: Path | str, formato: str) -> Path:
+        """Exporta la consulta a Excel ("xlsx") o PDF ("pdf"). Queda en la auditoría."""
+        from gimnasio.reportes import exportar as exp
+
+        if formato not in ("xlsx", "pdf"):
+            raise ErrorValidacion("Formato de exportación no válido.")
+        consulta = self.consultar_pagos(actual, filtros, limite=10**9)
+        partes = []
+        if filtros.desde or filtros.hasta:
+            partes.append("Pagos del " + (formato_fecha(filtros.desde) if filtros.desde else "inicio")
+                          + " al " + (formato_fecha(filtros.hasta) if filtros.hasta else "hoy"))
+        if filtros.cliente_id and consulta.filas:
+            partes.append(f"Cliente {consulta.filas[0].cliente_codigo} · {consulta.filas[0].cliente_nombre}")
+        partes.append(f"{consulta.cantidad} pagos válidos · total {_pesos(consulta.total)}")
+        if consulta.anulados_cantidad:
+            partes.append(f"{consulta.anulados_cantidad} anulados por "
+                          f"{_pesos(consulta.anulados_monto)} (no suman)")
+        subtitulo = " · ".join(partes)
+        filas = filas_exportables(consulta)
+        totales = ("Total", *[""] * 9, consulta.total)
+        if formato == "xlsx":
+            destino = exp.exportar_excel(ruta, "Consulta de pagos", ENCABEZADOS_CONSULTA, filas,
+                                         totales=totales, dinero={10}, subtitulo=subtitulo)
+        else:
+            destino = exp.exportar_pdf(ruta, "Consulta de pagos", subtitulo, ENCABEZADOS_CONSULTA,
+                                       filas, totales=totales, dinero={10})
+        with self._fabrica() as sesion:
+            auditoria.registrar(
+                sesion, "pagos_exportados", "pagos", usuario_id=actual.id, momento=self._reloj(),
+                detalle={"formato": formato, "filas": len(filas),
+                         "cliente_id": filtros.cliente_id,
+                         "desde": formato_fecha(filtros.desde) if filtros.desde else None,
+                         "hasta": formato_fecha(filtros.hasta) if filtros.hasta else None},
+            )
+            sesion.commit()
+        return Path(destino)
+
+
     # --- apoyo ------------------------------------------------------------------------
     @staticmethod
     def _cliente(sesion: Session, cliente_id: int) -> Cliente:
@@ -716,4 +887,5 @@ class ServicioPagos:
         pago.motivo_anulacion = motivo
         pago.anulado_por = actual.id
         pago.anulado_en = ahora
+
 

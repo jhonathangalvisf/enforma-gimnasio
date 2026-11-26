@@ -1,5 +1,29 @@
 # Progreso
 
+## Mejora — Consultar pagos y borrar pagos antiguos ✅ (26/11/2026)
+
+Pedido del dueño: en el menú Pagos, consultas por cliente y por fecha de pago, y poder borrar pagos hasta una fecha que él elija, protegido con una clave de seguridad que solo él conozca.
+
+### Qué se hizo
+- **Pantalla Pagos con pestañas:** "Cierre de caja" (lo de antes), "Consultar pagos" y "Borrar pagos antiguos" (esta última solo para el administrador).
+- **Consultar pagos** (`ServicioPagos.consultar_pagos` / `exportar_consulta`): filtros por cliente (código, nombre o documento), rango de fechas de pago o todas, método, concepto y usuario. Muestra total y cantidad de válidos; los anulados se ven en rojo pero no suman. Hasta 5.000 filas en pantalla (avisa si hay más; la exportación trae todo). Exporta a Excel y PDF (auditoría `pagos_exportados`) y abre el recibo del pago elegido. Recepción solo puede consultar los pagos de un cliente; las consultas generales piden el permiso de reportes.
+- **Borrar pagos antiguos** (`servicios/depuracion.py`, permiso nuevo `depurar_pagos`, solo admin):
+  - **Clave de seguridad** propia del apartado, guardada con argon2 en `config` (`depuracion_clave_hash`). La primera vez se crea con la contraseña del administrador; para cambiarla hace falta la clave actual. Debe ser distinta de la contraseña de inicio de sesión. 5 intentos fallidos bloquean 15 minutos; cada intento fallido queda en la auditoría. La clave solo vive en memoria mientras el apartado está abierto: al cambiar de pestaña o de módulo se vuelve a pedir.
+  - El administrador elige la fecha de corte (anterior a hoy), ve **qué se borraría** (pagos, monto, membresías, periodo, pagos conservados), escribe el **motivo** y confirma.
+  - Antes de borrar, siempre: **Excel** con todo lo que se quita en `<datos>/depuraciones/` y **copia de seguridad cifrada**. Si la copia falla, no se borra nada.
+  - Reglas: se borran los pagos (válidos y anulados) hasta el final del día de corte y las membresías terminadas cuyos pagos se borran completos. **Nunca** se borra la última membresía de cada cliente ni sus pagos, ni una membresía con pagos posteriores al corte, así que la vigencia y el saldo de los clientes no cambian. Las membresías sin pagos se conservan.
+  - La numeración de recibos **no se reutiliza**: antes de borrar se fija `recibo_siguiente` al mayor consecutivo + 1.
+  - Todo en una transacción y en la auditoría (`pagos_depurados`: corte, motivo, cantidades, total, rutas del Excel y de la copia, siguiente recibo). La auditoría no se borra.
+- Ayuda de Pagos actualizada.
+- 16 pruebas nuevas (442 en total): consultas por cliente, fecha y método, permisos de Recepción, anulados, límite, exportación, clave de seguridad (crear, cambiar, bloqueo), borrado con vigencia/saldo/consecutivo intactos, última membresía conservada, exigencias (admin, clave, fecha, motivo) y copia fallida sin borrar; y las pantallas.
+
+### Decisiones
+- **Excepción a RN-07** aprobada por el dueño: los pagos y membresías se siguen anulando (no borrando) en la operación diaria; el único borrado posible es esta depuración por fecha, protegida con clave, con copia y Excel previos y registrada en la auditoría.
+- Capturas en `/mnt/project-files/pagos_consultas/`.
+
+### Pendientes
+- Ninguno conocido. Con 100.000 pagos la base pesa 60 MB y el cierre de caja tarda 6,5 ms, así que el borrado es para orden, no por rendimiento.
+
 ## Fase 9 — Copias de seguridad y restauración ✅ (26/11/2026)
 
 ### Qué se hizo

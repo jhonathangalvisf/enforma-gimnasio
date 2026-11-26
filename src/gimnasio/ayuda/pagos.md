@@ -78,3 +78,33 @@ Renueve normalmente: si todavía está vigente, la nueva membresía empieza cuan
 
 **No aparece ningún plan al renovar.**
 No hay planes activos. El administrador debe activarlos en Configuración → Planes.
+
+## Consultar pagos
+
+En el módulo **Pagos**, pestaña **Consultar pagos**:
+
+- **Por cliente:** escriba el código, el nombre o el documento y presione **Enter** o **Buscar cliente**. Salen todos sus pagos.
+- **Por fecha de pago:** quite **Todas las fechas**, elija **desde** y **hasta** y pulse **Consultar**. También puede filtrar por método y concepto.
+- Arriba de la tabla sale la cantidad y el total. Los pagos anulados se ven en rojo y **no suman**.
+- **Exportar a Excel** o **Exportar a PDF** guarda la consulta. **Ver / imprimir recibo** (o doble clic) abre el recibo del pago elegido.
+
+Recepción solo puede consultar los pagos de un cliente. Las consultas generales son para el administrador.
+
+## Borrar pagos antiguos (solo administrador, con clave de seguridad)
+
+Sirve para dejar en el sistema solo los pagos recientes. Está en la pestaña **Borrar pagos antiguos** y pide una **clave de seguridad** distinta de la contraseña de inicio de sesión.
+
+- **La primera vez** cree la clave: escriba su contraseña de administrador y la nueva clave dos veces. Guárdela bien: para cambiarla hace falta la clave actual.
+- Después de 5 intentos fallidos el apartado se bloquea 15 minutos. Al salir de la pestaña se vuelve a pedir la clave.
+
+Para borrar:
+
+1. Elija **Borrar pagos hasta el** (la fecha incluida; tiene que ser anterior a hoy).
+2. Pulse **Ver qué se borraría**: dice cuántos pagos, por cuánto dinero y de qué fechas.
+3. Escriba el **motivo** y pulse **Borrar pagos…**. Confirme.
+
+Antes de borrar, el programa hace **siempre** una copia de seguridad cifrada y un **Excel** con todos los pagos que se quitan (carpeta `depuraciones` dentro de los datos del programa). Si la copia no se puede hacer, no se borra nada.
+
+Lo que **nunca** se borra: la última membresía de cada cliente y sus pagos, ni una membresía que tenga pagos después de la fecha elegida. Así, la vigencia y el saldo de los clientes quedan igual. La numeración de los recibos sigue sin repetirse.
+
+Si se borró algo por error, la única forma de recuperarlo es [restaurar la copia de seguridad](tema:backups) hecha justo antes.
