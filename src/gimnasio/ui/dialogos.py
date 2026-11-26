@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QDialog, QFormLayout, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget,
 )
 
+from gimnasio import __version__
 from gimnasio.servicios.claves import LONGITUD_MINIMA
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
@@ -70,6 +71,7 @@ class DialogoLogin(_DialogoBase):
         self.boton_salir.clicked.connect(self.reject)
         self.campo_usuario.returnPressed.connect(self.campo_clave.setFocus)
         self.campo_clave.returnPressed.connect(self.entrar)
+        self._capa.addWidget(etiqueta(f"Versión {__version__}", "textoSuave"))
         self.campo_usuario.setFocus()
 
     def entrar(self) -> None:

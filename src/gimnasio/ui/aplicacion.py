@@ -7,6 +7,7 @@ from __future__ import annotations
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QDialog
 
+from gimnasio.registro import registro
 from gimnasio.servicios.backups import TIPO_AUTOMATICO, ErrorBackupNegocio, ResultadoBackup
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.permisos import UsuarioActual
@@ -75,6 +76,21 @@ class Aplicacion:
             self.ventana = None
         QTimer.singleShot(0, lambda: self.mostrar_login(aviso))
 
+    def traer_al_frente(self) -> None:
+        """Alguien intentó abrir Enforma otra vez: se muestra la ventana que ya estaba
+        abierta (el inicio de sesión o la ventana principal) en lugar de otra copia."""
+        destino = self.app.activeModalWidget() or self.ventana
+        if destino is None:
+            return
+        if destino.isMinimized():
+            if destino is self.ventana:
+                destino.showMaximized()
+            else:
+                destino.showNormal()
+        destino.show()
+        destino.raise_()
+        destino.activateWindow()
+
     # --- copias automáticas ----------------------------------------------------
     def revisar_copia_diaria(self) -> bool:
         """Cada minuto: si ya pasó la hora diaria y no hay copia de hoy, la hace en
@@ -104,6 +120,7 @@ class Aplicacion:
             return
         self.servicios.backups.registrar(hilo.resultado)
         self.ultimo_resultado = hilo.resultado
+        registro.info("Copia diaria: %s", "exitosa" if hilo.resultado.exitoso else "fallida")
         hilo.deleteLater()
         self._avisar_resultado()
 

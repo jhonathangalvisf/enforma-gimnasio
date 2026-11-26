@@ -1,0 +1,157 @@
+# Pruebas en Windows y construcción del instalador de Enforma.
+#
+# - En cada push a main, en cada pull request y a mano (Actions → "Windows" → Run workflow).
+# - El instalador queda en la ejecución, sección "Artifacts": Enforma-Instalador-X.Y.Z.
+# - Al crear una etiqueta vX.Y.Z (p. ej. v1.0.0) se publica además como Release.
+name: Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # solo para publicar el Release de una etiqueta
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: Pruebas (incluye DPAPI real)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+      - name: pytest
+        run: pytest -q
+
+  instalador:
+    name: Ejecutable e instalador
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+          $version = python -c "import gimnasio; print(gimnasio.__version__)"
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Manual en PDF
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python empaquetado/manual_pdf.py
+
+      - name: Ejecutable (PyInstaller)
+        run: pyinstaller empaquetado/enforma.spec --noconfirm --clean --log-level WARN
+
+      - name: Prueba de humo del ejecutable
+        run: |
+          $reporte = "$env:RUNNER_TEMP\prueba_humo.txt"
+          $p = Start-Process dist\Enforma\Enforma.exe -ArgumentList '--prueba-humo','--reporte',$reporte -Wait -PassThru
+          Get-Content $reporte
+          if ($p.ExitCode -ne 0) { Write-Error "La prueba de humo falló"; exit 1 }
+
+      - name: Instalador (Inno Setup)
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc /Q "/DVersion=$env:VERSION" empaquetado\enforma.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem dist\Enforma-Instalador-*.exe | Format-Table Name, Length
+
+      - name: Instalar en silencio, probar lo instalado y desinstalar
+        run: |
+          $instalador = (Get-ChildItem dist\Enforma-Instalador-*.exe | Select-Object -First 1).FullName
+          $destino = "C:\EnformaPrueba"
+          $p = Start-Process $instalador -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$destino" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "El instalador falló ($($p.ExitCode))"; exit 1 }
+          foreach ($archivo in 'Enforma.exe','Manual-Enforma.pdf','unins000.exe') {
+            if (-not (Test-Path "$destino\$archivo")) { Write-Error "Falta $archivo"; exit 1 }
+          }
+          $menu = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Enforma"
+          Get-ChildItem $menu | Format-Table Name
+          if (-not (Test-Path "$menu\Enforma.lnk")) { Write-Error "Falta el acceso directo"; exit 1 }
+
+          # Datos en una carpeta aparte (como %APPDATA%\Enforma), nunca en la instalación.
+          $env:ENFORMA_DATOS = "$env:RUNNER_TEMP\datos_prueba"
+          $p = Start-Process "$destino\Enforma.exe" -ArgumentList '--solo-migrar' -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or -not (Test-Path "$env:ENFORMA_DATOS\enforma.db")) { Write-Error "No creó la base"; exit 1 }
+          $diag = "$env:RUNNER_TEMP\diagnostico.txt"
+          $p = Start-Process "$destino\Enforma.exe" -ArgumentList '--diagnostico','--reporte',$diag -Wait -PassThru
+          Get-Content $diag
+          if ($p.ExitCode -ne 0) { Write-Error "El diagnóstico tiene fallas"; exit 1 }
+          if (-not (Select-String -Path $diag -Pattern 'Protección DPAPI: funciona' -Quiet)) { Write-Error "DPAPI no funcionó"; exit 1 }
+          $p = Start-Process "$destino\Enforma.exe" -ArgumentList '--prueba-humo','--reporte',"$env:RUNNER_TEMP\humo_instalado.txt" -Wait -PassThru
+          Get-Content "$env:RUNNER_TEMP\humo_instalado.txt"
+          if ($p.ExitCode -ne 0) { Write-Error "La prueba de humo del programa instalado falló"; exit 1 }
+
+          # Instancia única: abre la interfaz, una segunda copia debe cerrarse sola.
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $primera = Start-Process "$destino\Enforma.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($primera.HasExited) { Write-Error "La interfaz se cerró sola"; Get-Content "$env:ENFORMA_DATOS\logs\enforma.log"; exit 1 }
+          $segunda = Start-Process "$destino\Enforma.exe" -PassThru
+          if (-not $segunda.WaitForExit(15000)) { Write-Error "Se abrió una segunda copia"; exit 1 }
+          Stop-Process -Id $primera.Id -Force
+          Get-Content "$env:ENFORMA_DATOS\logs\enforma.log"
+          if (-not (Select-String -Path "$env:ENFORMA_DATOS\logs\enforma.log" -Pattern 'ya estaba abierto' -Quiet)) { Write-Error "La segunda copia no avisó"; exit 1 }
+          Remove-Item Env:QT_QPA_PLATFORM
+
+          # La desinstalación quita el programa pero no los datos.
+          Start-Process "$destino\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path "$destino\Enforma.exe"); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path "$destino\Enforma.exe") { Write-Error "No se desinstaló"; exit 1 }
+          if (-not (Test-Path "$env:ENFORMA_DATOS\enforma.db")) { Write-Error "La desinstalación borró los datos"; exit 1 }
+          "Instalación, prueba y desinstalación correctas."
+
+      - name: Guardar el instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: Enforma-Instalador-${{ env.VERSION }}
+          path: dist/Enforma-Instalador-*.exe
+          retention-days: 90
+
+      - name: Guardar informes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informes-${{ env.VERSION }}
+          path: |
+            ${{ runner.temp }}/*.txt
+            ${{ runner.temp }}/datos_prueba/logs/
+          if-no-files-found: ignore
+
+      - name: Publicar Release (solo etiquetas vX.Y.Z)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Enforma-Instalador-*.exe
+          body: |
+            Instalador de Enforma ${{ env.VERSION }} para Windows 10/11 (64 bits).
+            Vea el Manual de instalación y respaldo (docs/MANUAL_INSTALACION.md).
