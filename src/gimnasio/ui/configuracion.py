@@ -6,9 +6,8 @@ from datetime import date
 
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDateEdit, QDialog, QFileDialog, QFormLayout, QGroupBox,
-    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QScrollArea, QSpinBox, QTableWidget,
-    QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
+    QComboBox, QDateEdit, QDialog, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+    QLineEdit, QScrollArea, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha_hora_local
@@ -19,44 +18,9 @@ from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
 from gimnasio.servicios.permisos import ROLES, UsuarioActual
 from gimnasio.servicios.usuarios import DatosUsuario
-from gimnasio.ui.comunes import boton, confirmar, etiqueta, mostrar_error
+from gimnasio.ui.comunes import boton, celda as _celda, confirmar, etiqueta, mostrar_error
+from gimnasio.ui.comunes import tabla as _tabla
 from gimnasio.ui.dialogos import _DialogoBase, campo_clave
-
-
-def _tabla(columnas: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(columnas))
-    t.setHorizontalHeaderLabels(columnas)
-    t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-    t.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-    t.setAlternatingRowColors(True)
-    t.verticalHeader().setVisible(False)
-    t.horizontalHeader().setStretchLastSection(True)
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-    t.setSortingEnabled(True)
-    return t
-
-
-ROL_ORDEN = Qt.ItemDataRole.UserRole + 1
-
-
-class _Celda(QTableWidgetItem):
-    """Celda que ordena por una clave propia (p. ej. la fecha real, no el texto dd/mm/aaaa)."""
-
-    def __lt__(self, otra: QTableWidgetItem) -> bool:
-        a, b = self.data(ROL_ORDEN), otra.data(ROL_ORDEN)
-        if a is not None and b is not None:
-            return a < b
-        return self.text().lower() < otra.text().lower()
-
-
-def _celda(texto: str, dato=None, orden=None) -> QTableWidgetItem:
-    item = _Celda(texto)
-    if dato is not None:
-        item.setData(Qt.ItemDataRole.UserRole, dato)
-    if orden is not None:
-        item.setData(ROL_ORDEN, orden)
-    return item
 
 
 # --- Parámetros -----------------------------------------------------------------

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    Boolean, CheckConstraint, Date, ForeignKey, Index, Integer, String, Text, event,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from gimnasio.modelos.base import Base, FechaHoraUTC, ahora_utc
+from gimnasio.texto import normalizar
 
 
 class Cliente(Base):
@@ -49,8 +52,21 @@ class Cliente(Base):
         FechaHoraUTC, default=ahora_utc, onupdate=ahora_utc
     )
     creado_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    # "nombres apellidos" en minúsculas y sin tildes, para buscar rápido por nombre.
+    # Se calcula solo al guardar (ver texto_busqueda); no se edita a mano.
+    busqueda: Mapped[str] = mapped_column(String(170), default="", server_default="")
 
     contactos: Mapped[list[Contacto]] = relationship(back_populates="cliente")
+
+
+def texto_busqueda(nombres: str | None, apellidos: str | None) -> str:
+    return normalizar(f"{nombres or ''} {apellidos or ''}".strip())
+
+
+@event.listens_for(Cliente, "before_insert")
+@event.listens_for(Cliente, "before_update")
+def _actualizar_busqueda(_mapper, _conexion, cliente: Cliente) -> None:
+    cliente.busqueda = texto_busqueda(cliente.nombres, cliente.apellidos)
 
 
 class Contacto(Base):

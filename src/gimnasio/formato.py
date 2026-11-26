@@ -20,3 +20,14 @@ def pesos(valor: int) -> str:
     """120000 -> '$ 120.000'."""
     signo = "-" if valor < 0 else ""
     return f"{signo}$ {abs(int(valor)):,}".replace(",", ".")
+
+
+def leer_fecha(texto: str) -> date | None:
+    """'05/03/1990' -> date(1990, 3, 5). Vacío -> None. Lanza ValueError si no es válida."""
+    texto = (texto or "").strip()
+    if not texto:
+        return None
+    try:
+        return datetime.strptime(texto, FORMATO_FECHA).date()
+    except ValueError:
+        raise ValueError(f"La fecha «{texto}» no es válida. Use el formato dd/mm/aaaa.") from None

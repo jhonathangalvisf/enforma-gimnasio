@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QAbstractItemView, QHeaderView, QLabel, QMessageBox, QPushButton, QTableWidget,
+    QTableWidgetItem, QWidget,
+)
 
 from gimnasio.servicios.errores import ErrorNegocio
 
@@ -41,3 +45,39 @@ def confirmar(padre: QWidget | None, titulo: str, texto: str) -> bool:
         QMessageBox.StandardButton.No,
     )
     return respuesta == QMessageBox.StandardButton.Yes
+
+
+def tabla(columnas: list[str]) -> QTableWidget:
+    t = QTableWidget(0, len(columnas))
+    t.setHorizontalHeaderLabels(columnas)
+    t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+    t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+    t.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+    t.setAlternatingRowColors(True)
+    t.verticalHeader().setVisible(False)
+    t.horizontalHeader().setStretchLastSection(True)
+    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    t.setSortingEnabled(True)
+    return t
+
+
+ROL_ORDEN = Qt.ItemDataRole.UserRole + 1
+
+
+class _Celda(QTableWidgetItem):
+    """Celda que ordena por una clave propia (p. ej. la fecha real, no el texto dd/mm/aaaa)."""
+
+    def __lt__(self, otra: QTableWidgetItem) -> bool:
+        a, b = self.data(ROL_ORDEN), otra.data(ROL_ORDEN)
+        if a is not None and b is not None:
+            return a < b
+        return self.text().lower() < otra.text().lower()
+
+
+def celda(texto: str, dato=None, orden=None) -> QTableWidgetItem:
+    item = _Celda(texto)
+    if dato is not None:
+        item.setData(Qt.ItemDataRole.UserRole, dato)
+    if orden is not None:
+        item.setData(ROL_ORDEN, orden)
+    return item
