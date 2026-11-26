@@ -19,6 +19,7 @@ from gimnasio.servicios.casilleros import ServicioCasilleros
 from gimnasio.servicios.clientes import ServicioClientes
 from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.depuracion import ServicioDepuracion
+from gimnasio.servicios.importacion import ServicioImportacion
 from gimnasio.servicios.invitados import ServicioInvitados
 from gimnasio.servicios.pagos import ServicioPagos
 from gimnasio.servicios.planes import ServicioPlanes
@@ -45,6 +46,7 @@ class Servicios:
     backups: ServicioBackups
     depuracion: ServicioDepuracion
     autorizaciones: ServicioAutorizaciones
+    importacion: ServicioImportacion
 
 
 def crear_servicios(
@@ -82,4 +84,6 @@ def crear_servicios(
         depuracion=ServicioDepuracion(
             fabrica, configuracion, lambda actual: backups.hacer_backup(actual),
             carpeta_datos, reloj),
+        importacion=ServicioImportacion(
+            fabrica, carpeta_datos, reloj, lambda actual: backups.hacer_backup(actual)),
     )

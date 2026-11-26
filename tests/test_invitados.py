@@ -98,8 +98,12 @@ def test_validaciones(servicios, recepcion):
 
 
 def test_contador_se_calcula_y_no_se_guarda():
-    """RN-10: ninguna columna guarda el número de visitas."""
-    columnas = set(Invitado.__table__.columns.keys())
+    """RN-10: ninguna columna guarda el número de visitas.
+
+    La única excepción es `visitas_anteriores` (migración 0009): un número fijo que se
+    trajo del programa anterior para las visitas que no tenían fecha. Nunca se actualiza;
+    el contador se sigue calculando desde invitado_asistencias y solo le suma ese número."""
+    columnas = set(Invitado.__table__.columns.keys()) - {"visitas_anteriores"}
     assert not {c for c in columnas if "visita" in c or "contador" in c or "total" in c}
 
 

@@ -66,6 +66,7 @@ ACCIONES = {
     "clave_depuracion_configurada": "Clave de seguridad de depuración configurada",
     "depuracion_clave_incorrecta": "Clave de seguridad de depuración incorrecta",
     "pagos_depurados": "Pagos antiguos borrados (depuración)",
+    "importacion_programa_anterior": "Datos importados del programa anterior",
     "autorizacion_fallida": "Autorización de administrador fallida",
     "ingreso_autorizado": "Ingreso autorizado por el administrador",
     "ingreso_tras_renovar": "Ingreso permitido tras renovar en Recepción",

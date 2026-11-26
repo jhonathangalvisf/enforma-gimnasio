@@ -94,13 +94,14 @@ class FichaInvitado:
     telefono: str
     creado_en: datetime
     creado_por: str
-    total_visitas: int  # sin las eliminadas
+    total_visitas: int  # sin las eliminadas, más las visitas_anteriores
     visitas_mes: int  # del mes en curso (Bogotá)
     primera_visita: date | None
     ultima_visita: date | None
     visitas: list[VisitaInvitado]  # más reciente primero
     limite_mes: int = 0  # 0 = sin límite
     cliente_codigo: str | None = None  # el mismo documento ya es de un cliente
+    visitas_anteriores: int = 0  # del programa anterior, sin fecha (incluidas en el total)
 
     @property
     def limite_alcanzado(self) -> bool:
@@ -111,7 +112,10 @@ class FichaInvitado:
         n = self.total_visitas
         if n == 0:
             return "Aún no tiene visitas registradas"
-        return f"Lleva {n} {'visita' if n == 1 else 'visitas'} como invitado"
+        texto = f"Lleva {n} {'visita' if n == 1 else 'visitas'} como invitado"
+        if self.visitas_anteriores:
+            texto += f" ({self.visitas_anteriores} del programa anterior sin fecha)"
+        return texto
 
 
 @dataclass(frozen=True)
@@ -399,7 +403,7 @@ class ServicioInvitados:
         ultima = func.max(InvitadoAsistencia.fecha).label("ultima")
         consulta = (
             select(Invitado.id, Invitado.nombre, Invitado.documento, Invitado.telefono,
-                   total, mes, ultima)
+                   total, mes, ultima, Invitado.visitas_anteriores)
             .outerjoin(InvitadoAsistencia, and_(
                 InvitadoAsistencia.invitado_id == Invitado.id, _VIGENTE))
             .group_by(Invitado.id)
@@ -412,7 +416,8 @@ class ServicioInvitados:
             filas = sesion.execute(consulta).all()
         return [
             FilaInvitado(id=r.id, nombre=r.nombre, documento=r.documento,
-                         telefono=r.telefono or "", visitas=r.visitas or 0,
+                         telefono=r.telefono or "",
+                         visitas=(r.visitas or 0) + (r.visitas_anteriores or 0),
                          visitas_mes=r.visitas_mes or 0, ultima_visita=_como_fecha(r.ultima))
             for r in filas
         ]
@@ -662,11 +667,13 @@ class ServicioInvitados:
         return FichaInvitado(
             id=invitado.id, nombre=invitado.nombre, documento=invitado.documento,
             telefono=invitado.telefono or "", creado_en=invitado.creado_en,
-            creado_por=creador or "—", total_visitas=len(vigentes),
+            creado_por=creador or "—",
+            total_visitas=len(vigentes) + (invitado.visitas_anteriores or 0),
             visitas_mes=sum(1 for v in vigentes if v.fecha >= inicio_mes),
             primera_visita=min((v.fecha for v in vigentes), default=None),
             ultima_visita=max((v.fecha for v in vigentes), default=None),
             visitas=visitas,
             limite_mes=self._configuracion.obtener("invitado_visitas_mes", sesion),
             cliente_codigo=cliente_codigo,
+            visitas_anteriores=invitado.visitas_anteriores or 0,
         )

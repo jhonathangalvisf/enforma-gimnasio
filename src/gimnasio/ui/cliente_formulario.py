@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from gimnasio.formato import fecha, fecha_hora_local, leer_fecha
 from gimnasio.servicios.clientes import (
-    SEXOS, TIPOS_DOCUMENTO, ContactoEmergencia, DatosCliente, ErrorDocumentoRegistrado,
+    SEXOS, TIPO_SIN_DOCUMENTO, TIPOS_DOCUMENTO, ContactoEmergencia, DatosCliente, ErrorDocumentoRegistrado,
     FichaCliente,
 )
 from gimnasio.servicios.contenedor import Servicios
@@ -109,6 +109,10 @@ class DialogoCliente(_DialogoBase):
             self.campo_codigo.setToolTip("Solo el administrador puede asignar otro código.")
         self.campo_tipo = QComboBox()
         for valor, texto in TIPOS_DOCUMENTO.items():
+            # «Sin documento» solo aparece en clientes importados que aún lo tienen.
+            if valor == TIPO_SIN_DOCUMENTO and (
+                    not existente or existente.tipo_documento != TIPO_SIN_DOCUMENTO):
+                continue
             self.campo_tipo.addItem(f"{valor} — {texto}", valor)
         self.campo_documento = QLineEdit()
         self.campo_documento.setMaxLength(20)

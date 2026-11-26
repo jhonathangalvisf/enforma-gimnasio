@@ -1,4 +1,5 @@
-"""Pantalla de Configuración (solo administrador): parámetros, usuarios, planes y auditoría."""
+"""Pantalla de Configuración (solo administrador): parámetros, usuarios, planes, auditoría
+e importación de datos del programa anterior."""
 
 from __future__ import annotations
 
@@ -561,10 +562,14 @@ class PantallaConfiguracion(QWidget):
         self.usuarios = PestanaUsuarios(servicios, actual)
         self.planes = PestanaPlanes(servicios, actual)
         self.auditoria = PestanaAuditoria(servicios, actual)
+        from gimnasio.ui.importacion import PestanaImportacion
+
+        self.importacion = PestanaImportacion(servicios, actual)
         self.pestanas.addTab(self.parametros, "Parámetros")
         self.pestanas.addTab(self.usuarios, "Usuarios")
         self.pestanas.addTab(self.planes, "Planes")
         self.pestanas.addTab(self.auditoria, "Auditoría")
+        self.pestanas.addTab(self.importacion, "Importar datos")
         self.pestanas.currentChanged.connect(self._al_cambiar)
         capa.addWidget(self.pestanas)
 

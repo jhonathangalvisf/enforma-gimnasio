@@ -40,12 +40,16 @@ from gimnasio.servicios.permisos import Permiso, UsuarioActual, exigir
 from gimnasio.servicios.sesion import Reloj, usuario_vigente
 from gimnasio.texto import normalizar
 
+# Clientes importados del programa anterior sin documento válido (o con uno repetido):
+# el documento queda «SD» + código hasta que el administrador ponga el verdadero.
+TIPO_SIN_DOCUMENTO = "SD"
 TIPOS_DOCUMENTO = {
     "CC": "Cédula de ciudadanía",
     "TI": "Tarjeta de identidad",
     "CE": "Cédula de extranjería",
     "PAS": "Pasaporte",
     "PPT": "Permiso por protección temporal",
+    TIPO_SIN_DOCUMENTO: "Sin documento (pendiente)",
 }
 SEXOS = {"M": "Masculino", "F": "Femenino", "O": "Otro"}
 ESTADOS = {"activo": "Activo", "inactivo": "Inactivo"}
@@ -364,7 +368,12 @@ def _validar(datos: DatosCliente, hoy: date) -> DatosCliente:
     if tipo not in TIPOS_DOCUMENTO:
         raise ErrorValidacion("Seleccione el tipo de documento.")
     documento = re.sub(r"[\s.\-]", "", datos.documento or "").upper()
-    if tipo in ("CC", "TI"):
+    if tipo == TIPO_SIN_DOCUMENTO:
+        if not re.fullmatch(r"SD\d{6}", documento):
+            raise ErrorValidacion(
+                "«Sin documento» solo se usa en clientes importados. Escriba el documento."
+            )
+    elif tipo in ("CC", "TI"):
         if not documento.isdigit() or not 5 <= len(documento) <= 11:
             raise ErrorValidacion(
                 "El número de documento debe tener solo números (entre 5 y 11 dígitos)."
@@ -486,6 +495,8 @@ class ServicioClientes:
         exigir(actual, Permiso.REGISTRAR_CLIENTES)
         admin = self._autorizaciones.verificar(actual, autorizacion, PARA_INSCRIPCION)
         datos = _validar(datos, self.hoy())
+        if datos.tipo_documento == TIPO_SIN_DOCUMENTO:
+            raise ErrorValidacion("Seleccione el tipo de documento y escriba el número.")
         ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)

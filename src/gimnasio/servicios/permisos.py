@@ -41,6 +41,7 @@ class Permiso(str, Enum):
     USUARIOS = "usuarios"
     AUDITORIA = "auditoria"
     BACKUPS = "backups"
+    IMPORTAR_DATOS = "importar_datos"  # traer los datos del programa anterior
     AYUDA = "ayuda"
 
 

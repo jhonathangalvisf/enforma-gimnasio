@@ -54,7 +54,7 @@ def test_ida_y_vuelta_crear_cifrar_restaurar_comparar(con_datos, admin, motor, t
     assert crudo.startswith(cifrado.MAGICO)
     assert b"Valentina" not in crudo and b"SQLite format" not in crudo  # va cifrado
     encabezado = cifrado.leer_encabezado(ruta)
-    assert encabezado.get("tipo") == "manual" and encabezado.get("revision") == "0008"
+    assert encabezado.get("tipo") == "manual" and encabezado.get("revision") == "0009"
 
     destino = tmp_path / "verificacion"
     destino.mkdir()
@@ -340,7 +340,7 @@ def test_restaurar_vuelve_al_estado_de_la_copia(con_datos, admin, motor, sesion,
     assert sorted(p.name for p in (tmp_path / "fotos").iterdir()) == ["000001.png"]
     with motor.connect() as c:
         assert c.execute(text("PRAGMA integrity_check")).scalar_one() == "ok"
-        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0008"
+        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0009"
 
     # Hubo copia "antes de restaurar" con el estado previo (4 clientes).
     [previa] = list((tmp_path / "backups" / CARPETA_SEGURIDAD).glob("*.enfbak"))
@@ -380,7 +380,7 @@ def test_restaurar_copia_de_version_mas_nueva_se_rechaza(con_datos, admin, motor
 
 
 def test_restaurar_copia_vieja_actualiza_el_esquema(con_datos, admin, motor, tmp_path):
-    """Una copia hecha con la versión anterior (0006) se restaura y queda en 0008."""
+    """Una copia hecha con la versión anterior (0006) se restaura y queda en 0009."""
     vieja = tmp_path / "vieja"
     vieja.mkdir()
     base_vieja = vieja / "enforma.db"
@@ -389,6 +389,7 @@ def test_restaurar_copia_vieja_actualiza_el_esquema(con_datos, admin, motor, tmp
         c.execute("DROP INDEX ix_backups_log_fecha_hora")
         c.execute("DROP INDEX ix_pagos_consecutivo_concepto")  # como antes de la 0008
         c.execute("CREATE UNIQUE INDEX ix_pagos_consecutivo ON pagos (consecutivo)")
+        c.execute("ALTER TABLE invitados DROP COLUMN visitas_anteriores")  # antes de la 0009
         c.execute("UPDATE alembic_version SET version_num = '0006'")
     contenido, resumen = paquete.crear_paquete(base_vieja, vieja)
     archivo = vieja / "vieja.enfbak"
@@ -397,7 +398,7 @@ def test_restaurar_copia_vieja_actualiza_el_esquema(con_datos, admin, motor, tmp
         "revision": resumen.revision}))
     con_datos.backups.restaurar(admin, archivo, CLAVE)
     with motor.connect() as c:
-        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0008"
+        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0009"
 
 
 def test_restaurar_rechaza_usuario_desactivado(con_datos, admin, servicios):

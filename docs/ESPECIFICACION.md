@@ -31,6 +31,7 @@ Aplicación de escritorio para Windows, de un solo puesto (1 PC), sin nube, para
 | Reportes | Básicos (asistencia del día, casilleros, por vencer, invitados del día) | Todos |
 | Planes, precios, casilleros (crear/editar), configuración | ✖ | ✔ |
 | Usuarios, auditoría, backups y restauración | ✖ | ✔ |
+| Importar datos del programa anterior | ✖ | ✔ (una vez, con copia previa) |
 | Ayuda | ✔ | ✔ |
 
 Los permisos se validan en la capa de servicios, no solo ocultando botones. La "clave de administrador" es el usuario y la contraseña de un administrador activo: el servicio entrega una autorización que vive en memoria, vence pronto y se gasta con la operación (un cobro; la inscripción y su primer cobro; o el módulo Pagos mientras esté abierto). Queda en la auditoría quién autorizó.
@@ -127,7 +128,7 @@ Asistencia (3.5), casilleros (3.6), invitados (3.7) y además:
 - RN-07 **Nada financiero se borra:** pagos y membresías se anulan con motivo. *Única excepción (aprobada por el dueño):* el administrador puede borrar pagos antiguos hasta una fecha, con clave de seguridad, copia cifrada y Excel previos y registro en la auditoría; nunca la última membresía de un cliente ni la numeración de recibos.
 - RN-08 **Asistencias** se eliminan de forma lógica y quedan auditadas.
 - RN-09 **Clientes y usuarios no se eliminan**, solo se inactivan.
-- RN-10 **Invitado:** el documento identifica a la persona; las visitas se cuentan desde `invitado_asistencias` (no se guarda un contador, se calcula).
+- RN-10 **Invitado:** el documento identifica a la persona; las visitas se cuentan desde `invitado_asistencias` (no se guarda un contador, se calcula). *Única excepción:* `invitados.visitas_anteriores`, un número fijo traído del programa anterior para las visitas sin fecha; nunca se actualiza y se suma al total.
 - RN-11 **Instantánea del casillero:** cada asistencia guarda el número de casillero que el cliente tenía en ese momento, para que los reportes históricos no cambien si después se libera.
 
 ## 5. Modelo de datos (SQLite, SQLAlchemy 2, migraciones con Alembic)
@@ -238,6 +239,7 @@ En SQLAlchemy los índices parciales se declaran con `Index(..., unique=True, sq
 - Construir un **importador** con: vista previa, mapeo de columnas, detección de duplicados por documento, reporte de errores por fila y modo de prueba (sin guardar).
 - Importar primero a una copia de prueba; nunca tocar los archivos originales.
 - Mantener el sistema nuevo **en paralelo** con el actual durante 1 a 2 semanas antes de reemplazarlo.
+- **Hecho (Fase 10):** el programa actual es un desarrollo propio en dBase III (carpeta `DB3`, archivos `.DBF`). Se importa desde Configuración → Importar datos (ver `docs/PROGRESO.md`): clientes con su mismo código, vigencia como membresía «Programa anterior» de $0, asistencias, casilleros e invitados. No se importan pagos (valores no reales), datos de salud ni medidas.
 
 ## 11. Huella dactilar (fase final, opcional)
 
