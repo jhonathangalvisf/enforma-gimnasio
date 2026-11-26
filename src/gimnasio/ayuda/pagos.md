@@ -17,7 +17,12 @@ Este tema explica cómo se venden y renuevan las membresías, cómo se registran
 3. Ya viene elegido el último plan del cliente. Cámbielo si hace falta.
 4. Revise la fecha en que **inicia**. Debajo aparece hasta cuándo **vence**.
 5. En **Pago ahora** ponga el **monto**, el **método** (efectivo, tarjeta o transferencia) y la **referencia** (obligatoria con tarjeta o transferencia: el número de aprobación o de la transacción).
-6. Pulse **Registrar**. Si dejó marcada la casilla, se abre el recibo para imprimirlo.
+6. Si el cliente también paga el **casillero**, marque **Pagar también el casillero (en el mismo recibo)**: si ya tiene uno, se renueva; si no, elija a mano uno libre de su zona. Ponga los días y el valor.
+7. Pulse **Registrar**. Si dejó marcada la casilla, se abre el recibo para imprimirlo.
+
+### Mensualidad y casillero en un solo recibo
+
+Cuando se pagan juntos, sale **un solo recibo con un solo número** (por ejemplo R-000123) que trae los dos conceptos, cada uno con su valor, y el **total pagado**. Los dos usan el mismo método de pago. Para cobrar el casillero junto con la mensualidad hay que registrar pago de la mensualidad (no "sin pago").
 
 ### Cuándo empieza la nueva membresía
 
@@ -40,11 +45,15 @@ Solo el administrador puede cambiar el **precio** del plan en una venta. Cuando 
 
 ## Otros pagos
 
-En la pestaña **Pagos** de la ficha, **Registrar otro pago…** sirve para cobros que no son membresía ni casillero (concepto "Otro"). El pago del casillero se registra al asignarlo o renovarlo en [Casilleros](tema:casilleros).
+En la pestaña **Pagos** de la ficha, **Registrar otro pago…** sirve para cobros que no son membresía ni casillero (concepto "Otro").
+
+### Pagar solo el casillero
+
+En la pantalla **Pagos**, pulse **Pagar casillero…** y escriba el código, documento o nombre del cliente. Si no tiene casillero, elija **a mano** uno libre de su zona; si ya tiene uno, se renueva. Ponga los días y el valor y pulse el botón de guardar. Sale un recibo propio con el **siguiente número consecutivo**. También se puede hacer desde [Casilleros](tema:casilleros) o desde la pestaña Casillero de la ficha.
 
 ## Recibos
 
-Cada pago tiene un **recibo con número consecutivo** (por ejemplo R-000123) que nunca se repite. El recibo trae el logo y los datos del gimnasio, el cliente, el concepto, las fechas, el método, el valor, el saldo que quedó y quién atendió.
+Cada recibo tiene un **número consecutivo** (por ejemplo R-000123) que nunca se repite. Un recibo puede tener dos conceptos cuando la mensualidad y el casillero se pagan juntos; si después se anula uno de los dos, el recibo lo muestra como ANULADO y el total solo cuenta el otro. El recibo trae el logo y los datos del gimnasio, el cliente, el concepto, las fechas, el método, el valor, el saldo que quedó y quién atendió.
 
 Para verlo o reimprimirlo, seleccione el pago y pulse **Ver / imprimir recibo** (en la ficha o en la pantalla Pagos). Se abre en el visor de PDF del computador, desde donde se imprime. Los recibos se guardan en la carpeta de datos del programa.
 

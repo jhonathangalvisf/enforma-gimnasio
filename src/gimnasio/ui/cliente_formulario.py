@@ -155,6 +155,21 @@ class DialogoCliente(_DialogoBase):
             self.campos_emergencia.append((nombre, telefono))
         interior.addWidget(caja_contacto)
 
+        # Inscripción: al guardar se cobra la mensualidad y, si quiere, el casillero
+        # (en el mismo recibo). Más adelante se puede pagar desde Pagos.
+        self.campo_casillero: QCheckBox | None = None
+        if self._existente is None and actual.puede(Permiso.ASIGNAR_CASILLERO):
+            caja_casillero = QGroupBox("Casillero")
+            capa_casillero = QVBoxLayout(caja_casillero)
+            self.campo_casillero = QCheckBox(
+                "¿Desea casillero? Se elige uno libre y se cobra junto con la mensualidad, "
+                "en el mismo recibo.")
+            capa_casillero.addWidget(self.campo_casillero)
+            capa_casillero.addWidget(etiqueta(
+                "Si no lo quiere ahora, solo paga la mensualidad. Puede pagar un casillero más "
+                "adelante desde Pagos.", "textoSuave"))
+            interior.addWidget(caja_casillero)
+
         caja_otros = QGroupBox("Autorización y foto")
         otros = QFormLayout(caja_otros)
         self.campo_autoriza = QCheckBox(
@@ -279,6 +294,10 @@ class DialogoCliente(_DialogoBase):
                     "Los datos se guardaron, pero no se pudo copiar la foto."))
         self.ficha = clientes.obtener_ficha(self._actual, cliente_id)
         self.accept()
+
+    @property
+    def quiere_casillero(self) -> bool:
+        return self.campo_casillero is not None and self.campo_casillero.isChecked()
 
     def _documento_registrado(self, e: ErrorDocumentoRegistrado) -> None:
         """Un cliente tiene un solo código: se abre (y reactiva) el registro antiguo."""

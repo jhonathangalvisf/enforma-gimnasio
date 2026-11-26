@@ -54,7 +54,7 @@ Los permisos se validan en la capa de servicios, no solo ocultando botones.
 - RF-P1: Planes configurables (nombre, duración en días, precio, activo): mensual, quincenal, trimestral, por días, etc.
 - RF-P2: Registrar membresía: plan, fecha de inicio, fecha de fin calculada, precio pactado (permite descuento con motivo, solo admin).
 - RF-P3: Registrar pago: monto, método (**efectivo, tarjeta, transferencia**), referencia (obligatoria en tarjeta y transferencia), concepto (membresía, casillero, otro), usuario y fecha/hora automáticos. Soporta pago parcial y saldo pendiente.
-- RF-P4: Recibo imprimible en PDF con consecutivo.
+- RF-P4: Recibo imprimible en PDF con consecutivo. Si la mensualidad y el casillero se pagan juntos, van en un solo recibo con un solo número y los dos conceptos; solo casillero = recibo propio con el siguiente consecutivo.
 - RF-P5: Anular pago (solo admin) con motivo obligatorio. Nunca se borra.
 - RF-P6: **Cierre de caja diario** por usuario y método de pago.
 - RF-P7: Renovación rápida desde la ficha del cliente y desde la alerta roja de Recepción.

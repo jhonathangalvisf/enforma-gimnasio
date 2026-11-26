@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from gimnasio.formato import fecha, fecha_hora_local, pesos
 from gimnasio.servicios.clientes import FilaMembresia
 from gimnasio.servicios.contenedor import Servicios
-from gimnasio.servicios.errores import ErrorNegocio
+from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
 from gimnasio.servicios.pagos import (
     CONCEPTOS, METODOS, MONTO_MAXIMO, DatosPago, MembresiaRegistrada, PagoRegistrado,
     calcular_fecha_fin,
@@ -109,15 +109,72 @@ class _CamposPago(QGroupBox):
         return DatosPago(self.monto.value(), self.metodo.currentData(), self.referencia.text())
 
 
+class _CamposCasillero(QGroupBox):
+    """Casillero cobrado junto con la mensualidad (mismo recibo). Si el cliente ya tiene
+    uno, se renueva; si no, se elige a mano uno libre de su zona."""
+
+    def __init__(self, servicios: Servicios, actual: UsuarioActual, cliente_id: int):
+        super().__init__("Pagar también el casillero (en el mismo recibo)")
+        from gimnasio.servicios.casilleros import ZONAS
+
+        self.setCheckable(True)
+        self.setChecked(False)
+        self.actual_casillero = servicios.casilleros.de_cliente(actual, cliente_id)
+        capa = QHBoxLayout(self)
+        self.campo_casillero = QComboBox()
+        if self.actual_casillero is not None:
+            c = self.actual_casillero
+            hasta = f"pagado hasta el {fecha(c.vence)}" if c.vence else "sin fecha de vencimiento"
+            self.descripcion = QLabel(f"Renovar el casillero {c.numero} ({hasta})")
+            propuesta = servicios.casilleros.proponer(actual, c.asignacion_id)
+            capa.addWidget(self.descripcion)
+        else:
+            sexo = servicios.clientes.obtener_ficha(actual, cliente_id).sexo
+            self.campo_casillero.addItem("Elija un casillero libre…", None)
+            for cid, numero, zona in servicios.casilleros.libres(actual, sexo):
+                self.campo_casillero.addItem(f"{numero}  ·  {ZONAS[zona]}", cid)
+            if self.campo_casillero.count() == 1:
+                self.campo_casillero.setItemText(0, "No hay casilleros libres de su zona")
+            propuesta = servicios.casilleros.proponer(actual)
+            capa.addWidget(QLabel("Casillero"))
+            capa.addWidget(self.campo_casillero, 1)
+        self.dias = QSpinBox()
+        self.dias.setRange(1, 366)
+        self.dias.setValue(propuesta.dias)
+        self.monto = campo_pesos(propuesta.precio)
+        capa.addWidget(QLabel("Días"))
+        capa.addWidget(self.dias)
+        capa.addWidget(QLabel("Valor"))
+        capa.addWidget(self.monto)
+
+    def datos(self):
+        """CasilleroEnRecibo con lo elegido (lanza ErrorValidacion si falta algo)."""
+        from gimnasio.servicios.casilleros import CasilleroEnRecibo
+        from gimnasio.servicios.errores import ErrorValidacion
+
+        if self.monto.value() <= 0:
+            raise ErrorValidacion("Escriba el valor del casillero.")
+        if self.actual_casillero is not None:
+            return CasilleroEnRecibo(monto=self.monto.value(), dias=self.dias.value(),
+                                     asignacion_id=self.actual_casillero.asignacion_id)
+        if self.campo_casillero.currentData() is None:
+            raise ErrorValidacion("Elija el casillero.")
+        return CasilleroEnRecibo(monto=self.monto.value(), dias=self.dias.value(),
+                                 casillero_id=self.campo_casillero.currentData())
+
+
 class DialogoMembresia(_DialogoBase):
-    """Registrar o renovar una membresía, con el pago (completo o abono) en el mismo paso."""
+    """Registrar o renovar una membresía, con el pago (completo o abono) en el mismo paso.
+    Opcionalmente cobra también el casillero en el mismo recibo."""
 
     def __init__(self, servicios: Servicios, actual: UsuarioActual, cliente_id: int,
-                 nombre_cliente: str = "", padre: QWidget | None = None):
-        super().__init__("Renovar membresía", nombre_cliente, padre)
+                 nombre_cliente: str = "", padre: QWidget | None = None,
+                 con_casillero: bool = False, titulo: str = "Renovar membresía"):
+        super().__init__(titulo, nombre_cliente, padre)
         self.setMinimumWidth(640)
         self._servicios, self._actual, self._cliente_id = servicios, actual, cliente_id
         self.resultado: MembresiaRegistrada | None = None
+        self.resultado_casillero = None
         self.ruta_recibo: Path | None = None
         self.abrir: Callable[[Path], None] = abrir_archivo
         self._planes = {p.id: p for p in servicios.planes.listar(actual, solo_activos=True)}
@@ -159,7 +216,13 @@ class DialogoMembresia(_DialogoBase):
         self.sin_pago = QCheckBox("Registrar sin pago (queda todo el valor como saldo pendiente)")
         self.abrir_recibo = QCheckBox("Abrir el recibo al guardar para imprimirlo")
         self.abrir_recibo.setChecked(True)
-        for w in (self.pago, self.sin_pago, self.abrir_recibo):
+        self.casillero: _CamposCasillero | None = None
+        widgets = [self.pago, self.sin_pago]
+        if actual.puede(Permiso.ASIGNAR_CASILLERO):
+            self.casillero = _CamposCasillero(servicios, actual, cliente_id)
+            self.casillero.setChecked(con_casillero)
+            widgets.append(self.casillero)
+        for w in (*widgets, self.abrir_recibo):
             self._capa.insertWidget(self._capa.indexOf(self.error), w)
 
         self.boton_guardar = boton("Registrar", principal=True)
@@ -206,14 +269,25 @@ class DialogoMembresia(_DialogoBase):
             self.mostrar_error("Elija un plan.")
             return
         sin_pago = self.sin_pago.isChecked() or self.campo_precio.value() == 0
+        con_casillero = self.casillero is not None and self.casillero.isChecked()
+        comunes = dict(fecha_inicio=leer_fecha(self.campo_inicio),
+                       precio_pactado=self.campo_precio.value(),
+                       motivo_descuento=self.campo_motivo.text())
         try:
-            self.resultado = self._servicios.pagos.registrar_membresia(
-                self._actual, self._cliente_id, plan.id,
-                fecha_inicio=leer_fecha(self.campo_inicio),
-                precio_pactado=self.campo_precio.value(),
-                motivo_descuento=self.campo_motivo.text(),
-                pago=None if sin_pago else self.pago.datos(),
-            )
+            if con_casillero:
+                if sin_pago:
+                    self.mostrar_error(
+                        "Para cobrar el casillero en el mismo recibo registre también el pago "
+                        "de la mensualidad (o quite el casillero y cóbrelo aparte).")
+                    return
+                r = self._servicios.casilleros.mensualidad_con_casillero(
+                    self._actual, self._cliente_id, plan.id, pago=self.pago.datos(),
+                    casillero=self.casillero.datos(), **comunes)
+                self.resultado, self.resultado_casillero = r.membresia, r.casillero
+            else:
+                self.resultado = self._servicios.pagos.registrar_membresia(
+                    self._actual, self._cliente_id, plan.id,
+                    pago=None if sin_pago else self.pago.datos(), **comunes)
         except ErrorNegocio as e:
             self.mostrar_error(str(e))
             return
@@ -295,8 +369,8 @@ class PantallaPagos(QWidget):
         principal.addWidget(etiqueta("Pagos", "tituloPantalla"))
         principal.addWidget(etiqueta(
             "Las membresías y los pagos se registran desde la ficha del cliente (búsquela con "
-            "Ctrl+K). Aquí se ve la caja del día y se consultan los pagos; los anulados no "
-            "suman.", "textoSuave"))
+            "Ctrl+K); el casillero se puede cobrar aquí con «Pagar casillero…». Aquí se ve la "
+            "caja del día y se consultan los pagos; los anulados no suman.", "textoSuave"))
         self.pestanas = QTabWidget()
         principal.addWidget(self.pestanas, 1)
         cierre = QWidget()
@@ -350,6 +424,14 @@ class PantallaPagos(QWidget):
         botones = QHBoxLayout()
         self.boton_recibo = boton("Ver / imprimir recibo")
         botones.addWidget(self.boton_recibo)
+        self.boton_casillero = None
+        if actual.puede(Permiso.ASIGNAR_CASILLERO) and actual.puede(Permiso.REGISTRAR_PAGOS):
+            self.boton_casillero = boton("Pagar casillero…")
+            self.boton_casillero.setToolTip(
+                "Cobra solo el casillero, con su propio recibo: asigna uno libre o renueva el "
+                "que el cliente ya tiene.")
+            self.boton_casillero.clicked.connect(self._al_pulsar_casillero)
+            botones.addWidget(self.boton_casillero)
         self.boton_anular = None
         if actual.puede(Permiso.ANULAR_PAGOS):
             self.boton_anular = boton("Anular pago…")
@@ -410,6 +492,47 @@ class PantallaPagos(QWidget):
                     item.setForeground(Qt.GlobalColor.darkRed)
                 self.tabla.setItem(i, j, item)
         self.tabla.setSortingEnabled(True)
+
+    def _al_pulsar_casillero(self) -> None:
+        self.pagar_casillero()
+
+    def pagar_casillero(self, ejecutar: Callable[[QWidget], bool] | None = None) -> QWidget | None:
+        """Pide el cliente y abre asignar (si no tiene casillero) o renovar (si ya tiene).
+        `ejecutar` permite a las pruebas reemplazar `exec()` de los diálogos."""
+        from gimnasio.ui.casilleros import DialogoAsignarCasillero, DialogoRenovarCasillero
+        from gimnasio.ui.clientes import DialogoElegirCliente
+
+        texto = self._pedir(self, "Pagar casillero",
+                            "Código, documento o nombre del cliente:")
+        if not texto or not texto.strip():
+            return None
+        try:
+            filas = self._servicios.clientes.buscar_rapido(self._actual, texto)
+            if not filas:
+                mostrar_error(self, ErrorValidacion(f"No se encontró ningún cliente con «{texto}»."))
+                return None
+            fila = filas[0]
+            if len(filas) > 1:
+                elegir = DialogoElegirCliente(filas, texto, padre=self, texto_boton="Elegir")
+                if not (ejecutar or (lambda d: d.exec()))(elegir):
+                    return None
+                fila = next(f for f in filas if f.id == elegir.cliente_id)
+            tiene = self._servicios.casilleros.de_cliente(self._actual, fila.id)
+            if tiene is not None:
+                dialogo = DialogoRenovarCasillero(self._servicios, self._actual, tiene.asignacion_id,
+                                                  tiene.numero, fila.nombre_completo, padre=self)
+            else:
+                dialogo = DialogoAsignarCasillero(self._servicios, self._actual, cliente_id=fila.id,
+                                                  nombre_cliente=fila.nombre_completo,
+                                                  sexo=fila.sexo, padre=self)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return None
+        dialogo.abrir = self.abrir
+        dialogo.periodo.cobrar.setChecked(True)  # aquí se viene a pagar
+        if (ejecutar or (lambda d: d.exec()))(dialogo):
+            self.actualizar()
+        return dialogo
 
     def pago_seleccionado(self) -> int | None:
         filas = self.tabla.selectionModel().selectedRows()

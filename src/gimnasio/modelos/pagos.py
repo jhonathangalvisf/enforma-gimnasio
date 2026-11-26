@@ -72,7 +72,8 @@ class Pago(Base):
             "anulado = 0 OR (motivo_anulacion IS NOT NULL AND trim(motivo_anulacion) <> '')",
             name="motivo_anulacion",
         ),
-        Index("ix_pagos_consecutivo", "consecutivo", unique=True),
+        # Un recibo puede tener mensualidad y casillero con el mismo número (0008).
+        Index("ix_pagos_consecutivo_concepto", "consecutivo", "concepto", unique=True),
         Index("ix_pagos_cliente_id", "cliente_id"),
         Index("ix_pagos_fecha_hora", "fecha_hora"),
         CheckConstraint(
