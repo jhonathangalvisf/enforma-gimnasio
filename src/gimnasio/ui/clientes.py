@@ -13,7 +13,7 @@ from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QHBoxLayout, QHeaderView, QLineEdit,
-    QListWidget, QListWidgetItem, QMenu, QTableView, QVBoxLayout, QWidget,
+    QListWidget, QListWidgetItem, QMenu, QPushButton, QTableView, QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha, leer_fecha
@@ -27,6 +27,7 @@ from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
 
 TAMANO_PAGINA = 200
 ESPERA_BUSQUEDA_MS = 250
+AL_DIA = "al_dia"  # opción del filtro de vigencia: vigentes + por vencer
 DIAS_SIN_ASISTIR = (7, 15, 30, 60, 90, 180)
 MESES = ("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto",
          "Septiembre", "Octubre", "Noviembre", "Diciembre")
@@ -177,6 +178,8 @@ class PantallaClientes(QWidget):
             self.boton_pdf.clicked.connect(lambda: self.exportar("pdf"))
         capa.addLayout(cabecera)
 
+        capa.addLayout(self._crear_resumen())
+
         self.campo_busqueda = QLineEdit()
         self.campo_busqueda.setPlaceholderText(
             "Buscar por código, nombre, apellido, documento, teléfono o correo"
@@ -220,7 +223,7 @@ class PantallaClientes(QWidget):
         self.boton_nuevo.clicked.connect(self.nuevo)
         QShortcut(QKeySequence("Ctrl+N"), self, activated=self.nuevo)
         QShortcut(QKeySequence("Ctrl+F"), self, activated=self.enfocar_busqueda)
-        self.actualizar()
+        self.recargar()
 
     def _crear_filtros(self) -> QVBoxLayout:
         filas = QVBoxLayout()
@@ -235,6 +238,7 @@ class PantallaClientes(QWidget):
             self.filtro_estado.addItem(texto, valor)
         self.filtro_vigencia = QComboBox()
         self.filtro_vigencia.addItem("Vigencia: todas", None)
+        self.filtro_vigencia.addItem("Al día (vigentes y por vencer)", AL_DIA)
         for valor, texto in NOMBRES_VIGENCIA.items():
             self.filtro_vigencia.addItem(texto, valor.value)
         self.filtro_sexo = QComboBox()
@@ -295,13 +299,77 @@ class PantallaClientes(QWidget):
         return FiltrosClientes(
             texto=self.campo_busqueda.text(),
             estado=self.filtro_estado.currentData(),
-            vigencia=Vigencia(vigencia) if vigencia else None,
+            vigencia=Vigencia(vigencia) if vigencia and vigencia != AL_DIA else None,
+            al_dia=vigencia == AL_DIA,
             sexo=self.filtro_sexo.currentData(),
             plan_id=self.filtro_plan.currentData(),
             registro_desde=desde, registro_hasta=hasta,
             cumple_mes=self.filtro_cumple.currentData(),
             sin_asistir_dias=self.filtro_sin_asistir.currentData(),
         )
+
+    def _crear_resumen(self) -> QHBoxLayout:
+        """Contadores siempre visibles; un clic filtra la lista (clientes activos)."""
+        fila = QHBoxLayout()
+        fila.setSpacing(8)
+        self.botones_resumen: dict[str, QPushButton] = {}
+        for clave, color in (("al_dia", COLOR_VIGENCIA[Vigencia.VIGENTE]),
+                             ("por_vencer", COLOR_VIGENCIA[Vigencia.POR_VENCER]),
+                             ("vencidos", COLOR_VIGENCIA[Vigencia.VENCIDA]),
+                             ("sin_membresia", COLOR_VIGENCIA[Vigencia.SIN_MEMBRESIA]),
+                             ("inactivos", "#b42318"), ("total", "#1d2733")):
+            b = boton("")
+            b.setStyleSheet(f"QPushButton {{ color: {color}; font-weight: 600; }}")
+            b.setToolTip("Clic para ver estos clientes en la lista.")
+            b.clicked.connect(lambda _=False, c=clave: self.filtrar_resumen(c))
+            self.botones_resumen[clave] = b
+            fila.addWidget(b)
+        fila.addStretch()
+        return fila
+
+    def refrescar_resumen(self) -> None:
+        try:
+            r = self._servicios.clientes.resumen(self._actual)
+        except ErrorNegocio:
+            return
+        self.resumen = r
+        miles = lambda n: f"{n:,}".replace(",", ".")  # noqa: E731
+        textos = {
+            "al_dia": f"✔ Al día: {miles(r.al_dia)}",
+            "por_vencer": f"⚠ Por vencer: {miles(r.por_vencer)}",
+            "vencidos": f"✖ Vencidos: {miles(r.vencidos)}",
+            "sin_membresia": f"— Sin membresía: {miles(r.sin_membresia)}",
+            "inactivos": f"Inactivos: {miles(r.inactivos)}",
+            "total": f"Total: {miles(r.total)}",
+        }
+        for clave, texto in textos.items():
+            self.botones_resumen[clave].setText(texto)
+
+    def filtrar_resumen(self, clave: str) -> None:
+        estado, vigencia = {
+            "al_dia": ("activo", AL_DIA),
+            "por_vencer": ("activo", Vigencia.POR_VENCER.value),
+            "vencidos": ("activo", Vigencia.VENCIDA.value),
+            "sin_membresia": ("activo", Vigencia.SIN_MEMBRESIA.value),
+            "inactivos": ("inactivo", None),
+            "total": (None, None),
+        }[clave]
+        self.limpiar_filtros(actualizar=False)
+        for combo, valor in ((self.filtro_estado, estado), (self.filtro_vigencia, vigencia)):
+            combo.blockSignals(True)
+            combo.setCurrentIndex(max(0, combo.findData(valor)))
+            combo.blockSignals(False)
+        self.actualizar()
+
+    def recargar(self) -> None:
+        """Después de un cambio de datos: lista y contadores."""
+        self.refrescar_resumen()
+        self.actualizar()
+
+    def showEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
+        # Recepción o Pagos pudieron cambiar vigencias mientras la pantalla estaba oculta.
+        self.refrescar_resumen()
+        super().showEvent(evento)
 
     def actualizar(self) -> None:
         self._espera.stop()
@@ -325,7 +393,7 @@ class PantallaClientes(QWidget):
         if total:
             self.tabla.selectRow(0)
 
-    def limpiar_filtros(self) -> None:
+    def limpiar_filtros(self, actualizar: bool = True) -> None:
         for combo in (self.filtro_estado, self.filtro_vigencia, self.filtro_sexo,
                       self.filtro_plan, self.filtro_cumple, self.filtro_sin_asistir):
             combo.blockSignals(True)
@@ -333,8 +401,11 @@ class PantallaClientes(QWidget):
             combo.blockSignals(False)
         self.filtro_desde.clear()
         self.filtro_hasta.clear()
+        self.campo_busqueda.blockSignals(True)
         self.campo_busqueda.clear()
-        self.actualizar()
+        self.campo_busqueda.blockSignals(False)
+        if actualizar:
+            self.actualizar()
 
     def enfocar_busqueda(self) -> None:
         self.campo_busqueda.setFocus()
@@ -364,7 +435,7 @@ class PantallaClientes(QWidget):
 
         dialogo = DialogoCliente(self._servicios, self._actual, padre=self)
         if dialogo.exec() and dialogo.ficha:
-            self.actualizar()
+            self.recargar()
             self.abrir_ficha.emit(dialogo.ficha.id)
 
     def exportar(self, formato: str, ruta: str | None = None) -> int | None:
@@ -423,7 +494,7 @@ class PantallaClientes(QWidget):
             estado = QAction(texto, menu)
             estado.triggered.connect(
                 lambda: cambiar_estado(self, self._servicios, self._actual, fila.id)
-                and self.actualizar()
+                and self.recargar()
             )
             menu.addAction(estado)
         menu.exec(self.tabla.viewport().mapToGlobal(posicion))
@@ -437,7 +508,7 @@ class PantallaClientes(QWidget):
             mostrar_error(self, e)
             return
         if DialogoCliente(self._servicios, self._actual, ficha, padre=self).exec():
-            self.actualizar()
+            self.recargar()
 
 
 class DialogoElegirCliente(QDialog):

@@ -14,6 +14,12 @@ Son los ajustes del sistema. Cambie los valores y pulse **Guardar cambios**; **D
 | Si el cliente ya ingresó hoy | **Avisar y pedir confirmación**, **No permitir un segundo ingreso** o **Registrar sin avisar**. También aplica a invitados. | Avisar |
 | Si renueva antes de vencer | La nueva membresía inicia **el día siguiente al vencimiento** o **hoy** (pierde los días que le quedaban). | Día siguiente |
 
+### Clientes
+
+| Parámetro | Qué hace | Por defecto |
+|---|---|---|
+| Siguiente código de cliente | Código que se sugiere al inscribir. Los códigos ya usados se saltan solos. 0 = seguir después del código más alto. Se actualiza solo con cada inscripción. | 0 |
+
 ### Casilleros
 
 | Parámetro | Qué hace | Por defecto |

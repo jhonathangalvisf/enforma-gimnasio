@@ -1,5 +1,25 @@
 # Progreso
 
+## Clientes: códigos, vigencia a mano y clientes al día ✅ (26/11/2026)
+
+### Qué se hizo
+- **Código consecutivo + manual** (`servicios/clientes.py`): el formulario sugiere el consecutivo guardado en el parámetro `codigo_siguiente` (tabla `config`, sin migración). Al usarlo, el consecutivo avanza; los códigos ya usados se saltan. Solo el administrador puede escribir otro código (p. ej. 005000 para un cliente antiguo): no mueve el consecutivo, así que el siguiente cliente nuevo sigue en el orden normal. Con el parámetro en 0 se sigue después del código más alto (bases existentes); el primer código manual fija el consecutivo para que no lo arrastre.
+- **Cambiar código** (`cambiar_codigo`, solo admin): desde Modificar datos. Debe estar libre; el código viejo deja de funcionar y queda en la auditoría (`cliente_codigo_cambiado`, antes/después).
+- **Un cliente, un código:** inscribir un documento ya registrado lanza `ErrorDocumentoRegistrado` con nombre, código y estado. El formulario avisa, abre la ficha y, si estaba inactivo y es admin, lo reactiva con su código antiguo (Recepción debe pedírselo al admin).
+- **Cambiar vigencia a mano** (`cambiar_vigencia`, solo admin, botón en la ficha): ajusta la fecha fin de la última membresía activa (alargar o acortar, no antes del inicio), con motivo obligatorio. Sin membresías, pide plan y crea una sin cobro. Auditoría `cliente_vigencia_cambiada` con fechas y motivo. Es la excepción a RN-03.
+- **Clientes al día:** barra de totales en Clientes (Al día = vigentes + por vencer, Por vencer, Vencidos, Sin membresía, Inactivos, Total; cada uno filtra la lista) con `ServicioClientes.resumen` (una sola consulta, ~50 ms con 12.000 clientes) y filtro de vigencia "Al día".
+- Búsqueda por nombre o cédula para quien no recuerda su código: ya existía; se documentó en la ayuda.
+- Ayuda (Clientes y Configuración) y RN-01/RN-03 de la especificación actualizadas.
+- 18 pruebas nuevas (servicio y pantallas). Total: 441 pasan. Búsquedas con 12.000 clientes: peor 77 ms (meta < 200 ms).
+
+### Decisiones
+- El consecutivo vive en `config` y no en una tabla nueva: no hace falta migración.
+- Asignar código manual, cambiar código y cambiar vigencia son solo del administrador (permiso `MODIFICAR_CLIENTE_COMPLETO`).
+- Cambiar la vigencia no crea pagos ni cambia el precio pactado; la auditoría guarda la historia.
+
+### Pendientes
+- Casillero al inscribir y pago de casillero desde Pagos (pedido nuevo, PR aparte).
+
 ## Fase 9 — Copias de seguridad y restauración ✅ (26/11/2026)
 
 ### Qué se hizo

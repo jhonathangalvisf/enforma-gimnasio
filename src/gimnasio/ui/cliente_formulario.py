@@ -1,22 +1,27 @@
 """Formulario de registro y modificación de clientes.
 
-El código se asigna solo al guardar y no se puede editar. Si quien edita es
-Recepción, los campos que no son de contacto quedan bloqueados (el servicio
-además lo verifica).
+El código se sugiere con el consecutivo; solo el administrador puede escribir otro
+(al inscribir o al corregirlo después). Si la cédula ya existe, no se crea otro
+cliente: se ofrece abrir (y, si está inactivo, reactivar) el registro con su código
+antiguo. Si quien edita es Recepción, los campos que no son de contacto quedan
+bloqueados (el servicio además lo verifica).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from collections.abc import Callable
+
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
-    QLineEdit, QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget,
+    QLineEdit, QMessageBox, QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha, fecha_hora_local, leer_fecha
 from gimnasio.servicios.clientes import (
-    SEXOS, TIPOS_DOCUMENTO, ContactoEmergencia, DatosCliente, FichaCliente,
+    SEXOS, TIPOS_DOCUMENTO, ContactoEmergencia, DatosCliente, ErrorDocumentoRegistrado,
+    FichaCliente,
 )
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio
@@ -28,16 +33,25 @@ CONTACTOS_EMERGENCIA = 2
 AVISO_SOLO_ADMIN = "Solo el administrador puede cambiar este dato."
 
 
+def _preguntar(padre: QWidget, titulo: str, texto: str) -> bool:
+    return QMessageBox.question(
+        padre, titulo, texto,
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.Yes,
+    ) == QMessageBox.StandardButton.Yes
+
+
 def _lista(texto: str) -> list[str]:
     return [p.strip() for p in texto.replace(";", ",").split(",") if p.strip()]
 
 
 class DialogoCliente(_DialogoBase):
     def __init__(self, servicios: Servicios, actual: UsuarioActual,
-                 existente: FichaCliente | None = None, padre: QWidget | None = None):
+                 existente: FichaCliente | None = None, padre: QWidget | None = None,
+                 preguntar: Callable[[QWidget, str, str], bool] = _preguntar):
         titulo = f"Modificar cliente {existente.codigo}" if existente else "Nuevo cliente"
         subtitulo = (
-            "El código del cliente se asigna automáticamente al guardar."
+            "El código se sugiere con el consecutivo."
             if not existente else f"{existente.nombre_completo}"
         )
         super().__init__(titulo, subtitulo, padre)
@@ -47,6 +61,8 @@ class DialogoCliente(_DialogoBase):
         self._existente = existente
         self.ficha: FichaCliente | None = None
         self.ruta_foto: str | None = None
+        self._preguntar = preguntar
+        self.puede_codigo = actual.puede(Permiso.MODIFICAR_CLIENTE_COMPLETO)
 
         # El formulario base va dentro de un área desplazable (pantallas pequeñas).
         self._capa.removeItem(self.formulario)
@@ -56,6 +72,36 @@ class DialogoCliente(_DialogoBase):
 
         caja_datos = QGroupBox("Datos personales")
         datos = QFormLayout(caja_datos)
+        self.campo_codigo = QLineEdit()
+        self.campo_codigo.setMaxLength(6)
+        self.campo_codigo.setMaximumWidth(110)
+        self.ayuda_codigo = etiqueta("", "textoSuave")
+        codigo = QHBoxLayout()
+        codigo.addWidget(self.campo_codigo)
+        codigo.addWidget(self.ayuda_codigo, 1)
+        datos.addRow("Código", codigo)
+        if existente:
+            self.campo_codigo.setText(existente.codigo)
+            self.ayuda_codigo.setText(
+                "Si lo cambia, el código anterior deja de servir en Recepción."
+                if self.puede_codigo else ""
+            )
+        else:
+            try:
+                self.codigo_sugerido = servicios.clientes.codigo_sugerido(actual)
+            except ErrorNegocio as e:
+                self.codigo_sugerido = ""
+                self.mostrar_error(str(e))
+            self.campo_codigo.setText(self.codigo_sugerido)
+            self.ayuda_codigo.setText(
+                "Consecutivo sugerido. Puede escribir otro (por ejemplo, el de un cliente "
+                "antiguo) sin afectar el consecutivo." if self.puede_codigo
+                else "Consecutivo asignado automáticamente."
+            )
+        if not self.puede_codigo:
+            self.campo_codigo.setReadOnly(True)
+            self.campo_codigo.setEnabled(False)
+            self.campo_codigo.setToolTip("Solo el administrador puede asignar otro código.")
         self.campo_tipo = QComboBox()
         for valor, texto in TIPOS_DOCUMENTO.items():
             self.campo_tipo.addItem(f"{valor} — {texto}", valor)
@@ -205,14 +251,22 @@ class DialogoCliente(_DialogoBase):
         )
 
     def guardar(self) -> None:
+        clientes = self._servicios.clientes
         try:
             datos = self.datos()
-            clientes = self._servicios.clientes
+            codigo = self.campo_codigo.text().strip()
             if self._existente:
+                if self.puede_codigo and codigo != self._existente.codigo:
+                    clientes.cambiar_codigo(self._actual, self._existente.id, codigo)
                 clientes.modificar(self._actual, self._existente.id, datos)
                 cliente_id = self._existente.id
             else:
-                cliente_id = clientes.registrar(self._actual, datos).id
+                cliente_id = clientes.registrar(
+                    self._actual, datos, codigo=codigo if self.puede_codigo else None
+                ).id
+        except ErrorDocumentoRegistrado as e:
+            self._documento_registrado(e)
+            return
         except (ErrorNegocio, ValueError) as e:
             self.mostrar_error(str(e))
             return
@@ -224,4 +278,29 @@ class DialogoCliente(_DialogoBase):
                 mostrar_error(self, e if isinstance(e, ErrorNegocio) else ErrorNegocio(
                     "Los datos se guardaron, pero no se pudo copiar la foto."))
         self.ficha = clientes.obtener_ficha(self._actual, cliente_id)
+        self.accept()
+
+    def _documento_registrado(self, e: ErrorDocumentoRegistrado) -> None:
+        """Un cliente tiene un solo código: se abre (y reactiva) el registro antiguo."""
+        clientes = self._servicios.clientes
+        if e.activo:
+            pregunta = (f"{e.nombre} ya está registrado con el código {e.codigo}.\n"
+                        "¿Desea abrir su ficha?")
+        elif self._actual.puede(Permiso.ACTIVAR_CLIENTES):
+            pregunta = (f"{e.nombre} ya estuvo inscrito con el código {e.codigo} y está "
+                        "inactivo.\n¿Desea reactivarlo con su mismo código y abrir su ficha?")
+        else:
+            pregunta = (f"{e.nombre} ya estuvo inscrito con el código {e.codigo} y está "
+                        "inactivo. Pida al administrador que lo reactive.\n"
+                        "¿Desea abrir su ficha?")
+        if not self._preguntar(self, "Cliente ya registrado", pregunta):
+            self.mostrar_error(str(e))
+            return
+        try:
+            if not e.activo and self._actual.puede(Permiso.ACTIVAR_CLIENTES):
+                clientes.activar(self._actual, e.cliente_id)
+            self.ficha = clientes.obtener_ficha(self._actual, e.cliente_id)
+        except ErrorNegocio as error:
+            self.mostrar_error(str(error))
+            return
         self.accept()

@@ -36,6 +36,8 @@ ACCIONES = {
     "cliente_foto_cambiada": "Foto de cliente cambiada",
     "cliente_inactivado": "Cliente inactivado",
     "cliente_activado": "Cliente activado",
+    "cliente_codigo_cambiado": "Código de cliente cambiado",
+    "cliente_vigencia_cambiada": "Vigencia de cliente cambiada a mano",
     "casillero_creado": "Casillero creado",
     "casilleros_creados": "Casilleros creados en lote",
     "casillero_editado": "Casillero editado",

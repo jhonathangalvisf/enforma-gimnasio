@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 
 import pytest
 
@@ -158,3 +159,86 @@ def test_pantalla_clientes_en_la_ventana(qapp, servicios, recepcion):
     assert isinstance(v.pantalla_clientes, PantallaClientes)
     assert v.pantalla_clientes.modelo.filtros == FiltrosClientes()
     v.close()
+
+
+# --- códigos, cédula repetida, vigencia a mano y resumen ---------------------------
+
+def test_formulario_sugiere_codigo_y_admin_puede_cambiarlo(qapp, servicios, admin, recepcion):
+    d = DialogoCliente(servicios, recepcion)
+    assert d.campo_codigo.text() == "000001" and not d.campo_codigo.isEnabled()
+    d = DialogoCliente(servicios, admin)
+    assert d.campo_codigo.text() == "000001" and d.campo_codigo.isEnabled()
+    llenar(d)
+    d.campo_codigo.setText("5000")
+    d.guardar()
+    assert d.ficha.codigo == "005000"
+    d = DialogoCliente(servicios, admin)
+    assert d.campo_codigo.text() == "000001"  # el consecutivo no se movió
+    # Corregir el código de un cliente ya registrado (solo admin).
+    e = DialogoCliente(servicios, admin, servicios.clientes.obtener_ficha(admin, d_id := _id(servicios, admin, "005000")))
+    e.campo_codigo.setText("4999")
+    e.guardar()
+    assert servicios.clientes.obtener_ficha(admin, d_id).codigo == "004999"
+
+
+def _id(servicios, admin, codigo):
+    return servicios.clientes.buscar_rapido(admin, codigo)[0].id
+
+
+def test_cedula_repetida_reactiva_el_codigo_antiguo(qapp, servicios, admin):
+    viejo = servicios.clientes.registrar(admin, datos(documento="1020304050"))
+    servicios.clientes.inactivar(admin, viejo.id, "Se retiró")
+    preguntas = []
+    d = DialogoCliente(servicios, admin,
+                       preguntar=lambda _p, _t, texto: preguntas.append(texto) or True)
+    llenar(d, documento="1020304050")
+    d.guardar()
+    assert "000001" in preguntas[0] and "reactivarlo" in preguntas[0]
+    assert d.ficha.id == viejo.id and d.ficha.activo
+    assert servicios.clientes.buscar(admin).total == 1
+
+
+def test_cedula_repetida_recepcion_no_reactiva(qapp, servicios, admin, recepcion):
+    viejo = servicios.clientes.registrar(admin, datos(documento="1020304050"))
+    servicios.clientes.inactivar(admin, viejo.id, "Se retiró")
+    d = DialogoCliente(servicios, recepcion, preguntar=lambda *_: False)
+    llenar(d, documento="1020304050")
+    d.guardar()
+    assert d.ficha is None and "ya está registrada" in d.error.text()
+    assert not servicios.clientes.obtener_ficha(admin, viejo.id).activo
+
+
+def test_cambiar_vigencia_desde_la_ficha(qapp, servicios, admin, recepcion, motor):
+    from gimnasio.db.engine import crear_fabrica_sesiones
+    from gimnasio.ui.cliente_ficha import DialogoVigencia
+    from tests.test_clientes import HOY, membresia
+
+    c = servicios.clientes.registrar(admin, datos())
+    membresia(crear_fabrica_sesiones(motor), c.id, HOY, HOY)
+    assert DialogoFicha(servicios, recepcion, c.id).boton_vigencia is None
+    assert DialogoFicha(servicios, admin, c.id).boton_vigencia is not None
+    d = DialogoVigencia(servicios, admin, servicios.clientes.obtener_ficha(admin, c.id))
+    assert d.campo_plan is None
+    d.campo_fecha.setText("31/12/2026")
+    d.guardar()
+    assert "motivo" in d.error.text()
+    d.campo_motivo.setText("Cortesía de fin de año")
+    d.guardar()
+    assert servicios.clientes.obtener_ficha(admin, c.id).fecha_fin.isoformat() == "2026-12-31"
+
+
+def test_resumen_al_dia_filtra_la_lista(qapp, servicios, admin, motor):
+    from gimnasio.db.engine import crear_fabrica_sesiones
+    from tests.test_clientes import HOY, membresia
+
+    fabrica = crear_fabrica_sesiones(motor)
+    a = servicios.clientes.registrar(admin, datos())
+    servicios.clientes.registrar(admin, datos(documento="99887766"))
+    membresia(fabrica, a.id, HOY, HOY + timedelta(days=29))
+    p = PantallaClientes(servicios, admin)
+    assert p.botones_resumen["al_dia"].text() == "✔ Al día: 1"
+    assert p.botones_resumen["sin_membresia"].text() == "— Sin membresía: 1"
+    p.botones_resumen["al_dia"].click()
+    assert [f.id for f in p.modelo.filas] == [a.id]
+    p.botones_resumen["total"].click()
+    assert p.modelo.total == 2

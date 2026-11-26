@@ -364,7 +364,7 @@ class VentanaPrincipal(QMainWindow):
         dialogo.exec()
         self.ficha_abierta = None
         if dialogo.cambio and getattr(self, "pantalla_clientes", None):
-            self.pantalla_clientes.actualizar()
+            self.pantalla_clientes.recargar()
         if dialogo.cambio and getattr(self, "pantalla_pagos", None):
             self.pantalla_pagos.actualizar()
         if dialogo.cambio and getattr(self, "pantalla_casilleros", None):

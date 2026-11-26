@@ -126,7 +126,7 @@ def test_codigo_sigue_al_mayor_existente(clientes, admin, sesion):
 
 def test_documento_unico(clientes, admin):
     clientes.registrar(admin, datos())
-    with pytest.raises(ErrorValidacion, match="Ya existe un cliente con el documento.*000001"):
+    with pytest.raises(ErrorValidacion, match="ya está registrada.*000001"):
         clientes.registrar(admin, datos(documento="1.020.304.050", nombres="Otra"))
 
 
@@ -153,10 +153,10 @@ def test_pasaporte_alfanumerico(clientes, admin):
     assert ficha.documento == "AB12345"
 
 
-def test_codigo_no_editable_ni_borrable(clientes, admin):
-    """No hay métodos para cambiar el código ni para borrar clientes."""
+def test_clientes_no_se_borran_y_modificar_no_cambia_el_codigo(clientes, admin):
+    """No hay métodos para borrar clientes; el código solo cambia con cambiar_codigo (admin)."""
     nombres = {n for n in dir(clientes) if not n.startswith("_")}
-    assert not any(p in n for n in nombres for p in ("borrar", "eliminar", "codigo"))
+    assert not any(p in n for n in nombres for p in ("borrar", "eliminar"))
     ficha = clientes.registrar(admin, datos())
     clientes.modificar(admin, ficha.id, datos(nombres="Otra"))
     assert clientes.obtener_ficha(admin, ficha.id).codigo == "000001"
