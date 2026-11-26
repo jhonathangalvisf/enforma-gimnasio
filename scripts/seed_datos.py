@@ -240,13 +240,14 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
     asignaciones = []
     con_casillero: dict[int, tuple[str, date]] = {}  # cliente -> (numero, desde)
     libres = {"M": [c for c in casilleros if c["zona"] in ("hombres", "mixto") and c["estado"] == "disponible"],
-              "F": [c for c in casilleros if c["zona"] in ("mujeres", "mixto") and c["estado"] == "disponible"]}
+              "F": [c for c in casilleros if c["zona"] in ("mujeres", "mixto") and c["estado"] == "disponible"],
+              "O": [c for c in casilleros if c["zona"] == "mixto" and c["estado"] == "disponible"]}
     for lista in libres.values():
         rnd.shuffle(lista)
     candidatos = [c for c in info_clientes if c[3] == "activo" and c[0] in periodos]
     rnd.shuffle(candidatos)
     for cid, sexo, registro, _estado in candidatos:
-        lista = libres["M" if sexo == "M" else "F"]
+        lista = libres[sexo]  # zonas por sexo: «O» solo en casilleros mixtos
         # Sacar el primero que siga disponible (los mixtos están en ambas listas).
         while lista and lista[0]["estado"] != "disponible":
             lista.pop(0)
@@ -256,9 +257,11 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
         # Historial: a veces el casillero tuvo antes otro dueño ya liberado.
         desde = max(registro, hoy - timedelta(days=rnd.randint(5, 300)))
         cas["estado"] = "ocupado"
+        # Vencimiento propio del casillero (Fase 5): la mayoría al día, algunos vencidos.
+        vence = max(desde + timedelta(days=29), hoy + timedelta(days=rnd.randint(-45, 40)))
         asignaciones.append(dict(
             casillero_id=cas["id"], cliente_id=cid, fecha_asignacion=a_utc(desde, 9, 0),
-            asignado_por=rnd.choice(ids_recepcion),
+            fecha_vencimiento=vence, asignado_por=rnd.choice(ids_recepcion),
         ))
         con_casillero[cid] = (cas["numero"], desde)
     # Asignaciones antiguas ya liberadas (historial), de clientes sin casillero actual.
@@ -270,6 +273,7 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
         asignaciones.append(dict(
             casillero_id=cas["id"], cliente_id=cid,
             fecha_asignacion=a_utc(ini, 9, 0), fecha_liberacion=a_utc(fin, 18, 0),
+            fecha_vencimiento=fin,
             asignado_por=rnd.choice(ids_recepcion), liberado_por=rnd.choice(ids_recepcion),
             motivo_liberacion=rnd.choice(["Membresía vencida", "Solicitud del cliente", "Cambio de casillero"]),
         ))

@@ -244,8 +244,9 @@ class DialogoPago(_DialogoBase):
                 f"{membresia.plan}, {fecha(membresia.fecha_inicio)} al {fecha(membresia.fecha_fin)}"))
             self.formulario.addRow("Saldo pendiente", QLabel(pesos(membresia.saldo)))
         else:
-            for clave in ("casillero", "otro"):
-                self.campo_concepto.addItem(CONCEPTOS[clave], clave)
+            # El casillero se cobra al asignarlo o renovarlo (pestaña Casillero de la
+            # ficha), para que el pago corra su fecha de vencimiento.
+            self.campo_concepto.addItem(CONCEPTOS["otro"], "otro")
         self.formulario.addRow("Concepto", self.campo_concepto)
         self.pago = _CamposPago("Pago", membresia.saldo if membresia else 0)
         self.abrir_recibo = QCheckBox("Abrir el recibo al guardar para imprimirlo")

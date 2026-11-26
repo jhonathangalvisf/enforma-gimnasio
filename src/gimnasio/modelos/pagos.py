@@ -75,13 +75,22 @@ class Pago(Base):
         Index("ix_pagos_consecutivo", "consecutivo", unique=True),
         Index("ix_pagos_cliente_id", "cliente_id"),
         Index("ix_pagos_fecha_hora", "fecha_hora"),
+        CheckConstraint(
+            "casillero_asignacion_id IS NULL OR concepto = 'casillero'",
+            name="casillero_asignacion",
+        ),
         Index("ix_pagos_membresia_id", "membresia_id"),  # saldo de cada membresía
+        Index("ix_pagos_casillero_asignacion_id", "casillero_asignacion_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     consecutivo: Mapped[int] = mapped_column(Integer)
     cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"))
     membresia_id: Mapped[int | None] = mapped_column(ForeignKey("membresias.id"))
+    # Pago de casillero ligado a la asignación que renovó (Fase 5).
+    casillero_asignacion_id: Mapped[int | None] = mapped_column(
+        ForeignKey("casillero_asignaciones.id")
+    )
     concepto: Mapped[str] = mapped_column(String(10))
     monto: Mapped[int] = mapped_column(Integer)
     metodo: Mapped[str] = mapped_column(String(13))

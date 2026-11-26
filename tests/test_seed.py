@@ -25,6 +25,14 @@ def test_seed_pequeno_es_coherente(tmp_path):
         # Ningún cliente con dos casilleros activos ni casillero con dos dueños.
         assert uno("SELECT count(*) FROM (SELECT cliente_id FROM casillero_asignaciones "
                    "WHERE fecha_liberacion IS NULL GROUP BY cliente_id HAVING count(*) > 1)") == 0
+        # Zonas por sexo (Fase 5) y vencimiento propio en las asignaciones activas.
+        assert uno("SELECT count(*) FROM casillero_asignaciones a "
+                   "JOIN casilleros k ON k.id = a.casillero_id "
+                   "JOIN clientes c ON c.id = a.cliente_id WHERE a.fecha_liberacion IS NULL "
+                   "AND ((k.zona = 'hombres' AND c.sexo <> 'M') "
+                   "OR (k.zona = 'mujeres' AND c.sexo <> 'F'))") == 0
+        assert uno("SELECT count(*) FROM casillero_asignaciones "
+                   "WHERE fecha_liberacion IS NULL AND fecha_vencimiento IS NULL") == 0
         # Códigos de 6 dígitos secuenciales.
         assert uno("SELECT min(codigo) FROM clientes") == "000001"
         # RN-03: fecha_fin = inicio + duración - 1

@@ -233,6 +233,8 @@ class FilaCasillero:
     fecha_asignacion: datetime
     fecha_liberacion: datetime | None
     motivo_liberacion: str | None
+    vence: date | None = None  # último día pagado del casillero
+    liberado_por: str = ""
 
 
 @dataclass(frozen=True)
@@ -268,6 +270,8 @@ class FichaCliente:
     asistencias: list[FilaAsistencia]
     alertas: list[FilaAlerta]
     historial_casilleros: list[FilaCasillero]
+    # Casillero actual con vencimiento y sugerencia (servicios.casilleros.CasilleroCliente).
+    casillero_actual: object | None = None
 
     @property
     def saldo_pendiente(self) -> int:
@@ -667,7 +671,8 @@ class ServicioClientes:
             ]
             historial = [
                 FilaCasillero(c.numero, c.zona, a.fecha_asignacion, a.fecha_liberacion,
-                              a.motivo_liberacion)
+                              a.motivo_liberacion, a.fecha_vencimiento,
+                              nombres_usuarios.get(a.liberado_por, "") if a.liberado_por else "")
                 for a, c in sesion.execute(
                     select(CasilleroAsignacion, Casillero)
                     .join(Casillero, Casillero.id == CasilleroAsignacion.casillero_id)
@@ -678,6 +683,9 @@ class ServicioClientes:
             actual_casillero = next(
                 (h.numero for h in historial if h.fecha_liberacion is None), None
             )
+            from gimnasio.servicios.casilleros import casillero_de_cliente
+
+            info_casillero = casillero_de_cliente(sesion, self._configuracion, cliente.id, hoy)
             foto = None
             if cliente.foto_ruta:
                 ruta = self._carpeta_fotos() / cliente.foto_ruta
@@ -700,6 +708,7 @@ class ServicioClientes:
                                 == (hoy.month, hoy.day)),
                 membresias=membresias, pagos=pagos, asistencias=asistencias,
                 alertas=alertas, historial_casilleros=historial,
+                casillero_actual=info_casillero,
             )
 
     def buscar(

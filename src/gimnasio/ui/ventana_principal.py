@@ -22,6 +22,7 @@ from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
 from gimnasio.ui.configuracion import PantallaConfiguracion
 from gimnasio.ui.dialogos import DialogoCambiarClave
 from gimnasio.ui.asistencia import PantallaAsistencia
+from gimnasio.ui.casilleros import PantallaCasilleros
 from gimnasio.ui.pagos import PantallaPagos
 from gimnasio.ui.recepcion import PantallaRecepcion
 
@@ -45,7 +46,7 @@ MODULOS: tuple[Modulo, ...] = (
     Modulo("asistencia", "Asistencia", Permiso.REGISTRAR_ASISTENCIA,
            "Consulta, eliminación y reportes de asistencia."),
     Modulo("casilleros", "Casilleros", Permiso.ASIGNAR_CASILLERO,
-           "Asignación, liberación e historial de casilleros.", 5),
+           "Asignación, renovación, liberación e historial de casilleros."),
     Modulo("invitados", "Invitados", Permiso.REGISTRAR_INVITADOS,
            "Registro de invitados y conteo de visitas.", 6),
     Modulo("pagos", "Pagos", Permiso.REGISTRAR_PAGOS,
@@ -127,6 +128,7 @@ class VentanaPrincipal(QMainWindow):
         self.pantalla_pagos: PantallaPagos | None = None
         self.pantalla_recepcion: PantallaRecepcion | None = None
         self.pantalla_asistencia: PantallaAsistencia | None = None
+        self.pantalla_casilleros: PantallaCasilleros | None = None
         self.ficha_abierta: DialogoFicha | None = None
         self._indices: dict[str, int] = {}
         for modulo in MODULOS:
@@ -199,6 +201,10 @@ class VentanaPrincipal(QMainWindow):
             self.pantalla_asistencia = PantallaAsistencia(self._servicios, self.actual)
             self.pantalla_asistencia.registrar_manual.connect(self.registro_manual)
             return self.pantalla_asistencia
+        if modulo.clave == "casilleros":
+            self.pantalla_casilleros = PantallaCasilleros(self._servicios, self.actual)
+            self.pantalla_casilleros.abrir_ficha.connect(self.abrir_ficha)
+            return self.pantalla_casilleros
         return PantallaProximamente(modulo)
 
     # --- acciones -----------------------------------------------------------
@@ -278,6 +284,8 @@ class VentanaPrincipal(QMainWindow):
             self.pantalla_clientes.actualizar()
         if dialogo.cambio and getattr(self, "pantalla_pagos", None):
             self.pantalla_pagos.actualizar()
+        if dialogo.cambio and getattr(self, "pantalla_casilleros", None):
+            self.pantalla_casilleros.actualizar()
         if self.modulo_actual() == "recepcion" and self.pantalla_recepcion:
             self.pantalla_recepcion.actualizar_lista()
             self.pantalla_recepcion.enfocar()
