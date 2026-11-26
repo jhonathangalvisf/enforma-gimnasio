@@ -29,6 +29,7 @@ class Permiso(str, Enum):
     CIERRE_CAJA_GENERAL = "cierre_caja_general"  # ver la caja de todos y de cualquier día
     ELIMINAR_ASISTENCIA_DEL_DIA = "eliminar_asistencia_del_dia"
     ELIMINAR_ASISTENCIA_CUALQUIERA = "eliminar_asistencia_cualquiera"
+    GESTIONAR_ALERTAS = "gestionar_alertas"  # crear y resolver alertas manuales
     ASIGNAR_CASILLERO = "asignar_casillero"
     LIBERAR_CASILLERO = "liberar_casillero"
     REGISTRAR_INVITADOS = "registrar_invitados"
@@ -49,6 +50,7 @@ _RECEPCION = frozenset({
     Permiso.MODIFICAR_CONTACTO_CLIENTE,
     Permiso.REGISTRAR_PAGOS,
     Permiso.ELIMINAR_ASISTENCIA_DEL_DIA,
+    Permiso.GESTIONAR_ALERTAS,
     Permiso.ASIGNAR_CASILLERO,
     Permiso.LIBERAR_CASILLERO,
     Permiso.REGISTRAR_INVITADOS,

@@ -21,7 +21,9 @@ from gimnasio.ui.clientes import DialogoElegirCliente, PantallaClientes
 from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
 from gimnasio.ui.configuracion import PantallaConfiguracion
 from gimnasio.ui.dialogos import DialogoCambiarClave
+from gimnasio.ui.asistencia import PantallaAsistencia
 from gimnasio.ui.pagos import PantallaPagos
+from gimnasio.ui.recepcion import PantallaRecepcion
 
 INTERVALO_REVISION_MS = 15_000
 
@@ -37,11 +39,11 @@ class Modulo:
 
 MODULOS: tuple[Modulo, ...] = (
     Modulo("recepcion", "Recepción", Permiso.REGISTRAR_ASISTENCIA,
-           "Ingreso de clientes con el código o el lector: tarjeta verde, amarilla o roja.", 4),
+           "Ingreso de clientes con el código o el lector: tarjeta verde, amarilla o roja."),
     Modulo("clientes", "Clientes", Permiso.VER_CLIENTES,
            "Registro, consulta y modificación de clientes con búsqueda instantánea."),
     Modulo("asistencia", "Asistencia", Permiso.REGISTRAR_ASISTENCIA,
-           "Consulta de asistencias por día y por cliente.", 4),
+           "Consulta, eliminación y reportes de asistencia."),
     Modulo("casilleros", "Casilleros", Permiso.ASIGNAR_CASILLERO,
            "Asignación, liberación e historial de casilleros.", 5),
     Modulo("invitados", "Invitados", Permiso.REGISTRAR_INVITADOS,
@@ -107,7 +109,9 @@ class VentanaPrincipal(QMainWindow):
         capa = QVBoxLayout(central)
         capa.setContentsMargins(0, 0, 0, 0)
         capa.setSpacing(0)
-        capa.addWidget(self._crear_barra_superior(nombre))
+        self._pantalla_completa = False
+        self.barra_superior = self._crear_barra_superior(nombre)
+        capa.addWidget(self.barra_superior)
         cuerpo = QHBoxLayout()
         cuerpo.setSpacing(0)
         self.navegacion = QListWidget()
@@ -121,6 +125,8 @@ class VentanaPrincipal(QMainWindow):
 
         self.pantalla_clientes: PantallaClientes | None = None
         self.pantalla_pagos: PantallaPagos | None = None
+        self.pantalla_recepcion: PantallaRecepcion | None = None
+        self.pantalla_asistencia: PantallaAsistencia | None = None
         self.ficha_abierta: DialogoFicha | None = None
         self._indices: dict[str, int] = {}
         for modulo in MODULOS:
@@ -132,6 +138,7 @@ class VentanaPrincipal(QMainWindow):
             item.setData(Qt.ItemDataRole.UserRole, modulo.clave)
             self.navegacion.addItem(item)
         self.navegacion.currentRowChanged.connect(self.pantallas.setCurrentIndex)
+        self.navegacion.currentRowChanged.connect(self._al_cambiar_modulo)
         self.navegacion.setCurrentRow(0)
         self.statusBar().showMessage(f"Bienvenido, {actual.nombre_completo}.", 5000)
 
@@ -183,6 +190,15 @@ class VentanaPrincipal(QMainWindow):
         if modulo.clave == "pagos":
             self.pantalla_pagos = PantallaPagos(self._servicios, self.actual)
             return self.pantalla_pagos
+        if modulo.clave == "recepcion":
+            self.pantalla_recepcion = PantallaRecepcion(self._servicios, self.actual)
+            self.pantalla_recepcion.abrir_ficha.connect(self.abrir_ficha)
+            self.pantalla_recepcion.pantalla_completa.connect(self.alternar_pantalla_completa)
+            return self.pantalla_recepcion
+        if modulo.clave == "asistencia":
+            self.pantalla_asistencia = PantallaAsistencia(self._servicios, self.actual)
+            self.pantalla_asistencia.registrar_manual.connect(self.registro_manual)
+            return self.pantalla_asistencia
         return PantallaProximamente(modulo)
 
     # --- acciones -----------------------------------------------------------
@@ -196,6 +212,31 @@ class VentanaPrincipal(QMainWindow):
     def modulo_actual(self) -> str | None:
         item = self.navegacion.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _al_cambiar_modulo(self, _fila: int) -> None:
+        if self.modulo_actual() == "recepcion" and self.pantalla_recepcion:
+            self.pantalla_recepcion.enfocar()
+        elif self._pantalla_completa:
+            self.alternar_pantalla_completa()  # fuera de Recepción se ve todo de nuevo
+
+    def alternar_pantalla_completa(self) -> None:
+        """F11 en Recepción: oculta la barra y el menú y usa toda la pantalla."""
+        self._pantalla_completa = not self._pantalla_completa
+        self.barra_superior.setVisible(not self._pantalla_completa)
+        self.navegacion.setVisible(not self._pantalla_completa)
+        self.statusBar().setVisible(not self._pantalla_completa)
+        if self._pantalla_completa:
+            self.showFullScreen()
+        else:
+            self.showMaximized()
+        if self.pantalla_recepcion:
+            self.pantalla_recepcion.enfocar()
+
+    def registro_manual(self) -> None:
+        """Desde Asistencia: va a Recepción y abre la búsqueda por documento o nombre."""
+        self.ir_a("recepcion")
+        if self.pantalla_recepcion:
+            self.pantalla_recepcion.buscar_manual()
 
     def enfocar_busqueda(self) -> None:
         self.busqueda.setFocus()
@@ -237,6 +278,9 @@ class VentanaPrincipal(QMainWindow):
             self.pantalla_clientes.actualizar()
         if dialogo.cambio and getattr(self, "pantalla_pagos", None):
             self.pantalla_pagos.actualizar()
+        if self.modulo_actual() == "recepcion" and self.pantalla_recepcion:
+            self.pantalla_recepcion.actualizar_lista()
+            self.pantalla_recepcion.enfocar()
 
     def cambiar_clave(self) -> None:
         dialogo = DialogoCambiarClave(self._servicios, self.actual, padre=self)

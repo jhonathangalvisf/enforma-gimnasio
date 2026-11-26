@@ -443,7 +443,8 @@ class PantallaClientes(QWidget):
 class DialogoElegirCliente(QDialog):
     """Resultados de la búsqueda global cuando hay más de un cliente. Enter abre la ficha."""
 
-    def __init__(self, filas: list[FilaCliente], texto: str, padre: QWidget | None = None):
+    def __init__(self, filas: list[FilaCliente], texto: str, padre: QWidget | None = None,
+                 texto_boton: str = "Abrir ficha"):
         super().__init__(padre)
         self.setWindowTitle("Elegir cliente")
         self.setMinimumWidth(620)
@@ -466,7 +467,7 @@ class DialogoElegirCliente(QDialog):
         botones = QHBoxLayout()
         botones.addStretch()
         cancelar = boton("Cancelar")
-        abrir = boton("Abrir ficha", principal=True)
+        abrir = boton(texto_boton, principal=True)
         cancelar.clicked.connect(self.reject)
         abrir.clicked.connect(self.elegir)
         botones.addWidget(cancelar)

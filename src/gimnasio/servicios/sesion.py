@@ -13,7 +13,7 @@ from gimnasio.modelos import Usuario, ahora_utc
 from gimnasio.servicios import auditoria, claves
 from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.errores import ErrorAutenticacion, ErrorPermiso, UsuarioBloqueado
-from gimnasio.servicios.permisos import UsuarioActual
+from gimnasio.servicios.permisos import ROL_ADMIN, UsuarioActual
 
 Reloj = Callable[[], datetime]
 MENSAJE_CREDENCIALES = "Usuario o contraseña incorrectos."
@@ -100,11 +100,50 @@ class ServicioSesion:
             sesion.commit()
             return a_usuario_actual(usuario)
 
-    def _registrar_fallo(self, sesion: Session, usuario: Usuario, ahora: datetime) -> None:
+    def verificar_administrador(self, nombre_usuario: str, clave: str, motivo: str) -> UsuarioActual:
+        """Confirma usuario y contraseña de un administrador activo sin abrir sesión
+        (p. ej. "Ingreso autorizado" en Recepción). Los fallos cuentan para el bloqueo
+        igual que en el inicio de sesión y quedan en la auditoría."""
+        nombre = (nombre_usuario or "").strip().lower()
+        ahora = self._reloj()
+        with self._fabrica() as sesion:
+            usuario = sesion.scalar(select(Usuario).where(func.lower(Usuario.usuario) == nombre))
+            if usuario is None:
+                claves.verificar(None, clave)
+                auditoria.registrar(
+                    sesion, "autorizacion_fallida", "usuarios", momento=ahora,
+                    detalle={"usuario_digitado": nombre[:40], "motivo": "no existe",
+                             "para": motivo},
+                )
+                sesion.commit()
+                raise ErrorAutenticacion(MENSAJE_CREDENCIALES)
+            if usuario.bloqueado_hasta and usuario.bloqueado_hasta > ahora:
+                restante = (usuario.bloqueado_hasta - ahora).total_seconds() / 60
+                raise UsuarioBloqueado(max(1, math.ceil(restante)))
+            if not claves.verificar(usuario.hash_clave, clave):
+                self._registrar_fallo(sesion, usuario, ahora, accion="autorizacion_fallida")
+                sesion.commit()
+                if usuario.bloqueado_hasta and usuario.bloqueado_hasta > ahora:
+                    raise UsuarioBloqueado(self._config.obtener("minutos_bloqueo"))
+                raise ErrorAutenticacion(MENSAJE_CREDENCIALES)
+            if not usuario.activo or usuario.rol != ROL_ADMIN:
+                auditoria.registrar(
+                    sesion, "autorizacion_fallida", "usuarios", usuario_id=usuario.id,
+                    entidad_id=usuario.id, momento=ahora,
+                    detalle={"motivo": "no es administrador activo", "para": motivo},
+                )
+                sesion.commit()
+                raise ErrorPermiso("Solo un administrador activo puede autorizar el ingreso.")
+            usuario.intentos_fallidos = 0
+            sesion.commit()
+            return a_usuario_actual(usuario)
+
+    def _registrar_fallo(self, sesion: Session, usuario: Usuario, ahora: datetime,
+                         accion: str = "login_fallido") -> None:
         maximo = self._config.obtener("intentos_login_max", sesion)
         usuario.intentos_fallidos += 1
         auditoria.registrar(
-            sesion, "login_fallido", "usuarios", usuario_id=usuario.id,
+            sesion, accion, "usuarios", usuario_id=usuario.id,
             entidad_id=usuario.id, momento=ahora,
             detalle={"motivo": "clave incorrecta", "intento": usuario.intentos_fallidos},
         )

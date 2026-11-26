@@ -875,6 +875,8 @@ class ServicioClientes:
             condiciones.append(~exists().where(
                 Asistencia.cliente_id == Cliente.id,
                 Asistencia.eliminada.is_(False),
+                # Los intentos rechazados (vencido, inactivo) no cuentan como asistencia.
+                Asistencia.resultado.in_(("permitido", "por_vencer", "autorizado")),
                 Asistencia.fecha > desde,
             ))
         return condiciones

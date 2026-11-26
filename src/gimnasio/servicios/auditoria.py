@@ -48,6 +48,13 @@ ACCIONES = {
     "pago_registrado": "Pago registrado",
     "pago_anulado": "Pago anulado",
     "recibo_generado": "Recibo generado o reimpreso",
+    "autorizacion_fallida": "Autorización de administrador fallida",
+    "ingreso_autorizado": "Ingreso autorizado por el administrador",
+    "ingreso_tras_renovar": "Ingreso permitido tras renovar en Recepción",
+    "asistencia_eliminada": "Asistencia eliminada",
+    "alerta_creada": "Alerta creada",
+    "alerta_resuelta": "Alerta resuelta",
+    "asistencias_exportadas": "Reporte de asistencia exportado",
 }
 
 _CAMPOS_PROHIBIDOS = {"clave", "hash_clave", "contrasena", "password"}

@@ -1,5 +1,58 @@
 # Progreso
 
+## Fase 4 — Recepción y asistencia ✅ (26/11/2026)
+
+### Qué se hizo
+- **`servicios/asistencia.py`** (Recepción y Asistencia, con permisos y auditoría):
+  - Código de 6 dígitos (también sin ceros a la izquierda) o `qr_token`.
+  - Tarjeta: foto, nombre, código, plan, vencimiento, días restantes, casillero, alertas activas (críticas primero), cumpleaños y saldo pendiente. **Verde** vigente; **amarillo** por vencer (umbral configurable, "Tu plan vence el dd/mm/aaaa (faltan X días)") o con saldo pendiente; **rojo** vencido, sin membresía, membresía que aún no inicia o cliente inactivo.
+  - Cada intento queda guardado con su resultado (RF-R5) y la instantánea del casillero (RN-11).
+  - Asistencia duplicada según el parámetro `asistencia_duplicada` (por defecto avisar y confirmar).
+  - **Ingreso autorizado**: usuario y contraseña de un administrador activo (`ServicioSesion.verificar_administrador`); los fallos cuentan para el bloqueo igual que el login. El intento rechazado pasa a "autorizado" y la auditoría queda a nombre del administrador, con quién lo registró y el motivo.
+  - **Renovar ahora**: abre la renovación de la Fase 3 (`DialogoMembresia`) y, si queda vigente, el intento rechazado pasa a "permitido" o "por vencer" (auditado).
+  - Resumen del día: asistentes (clientes distintos), ingresos y rechazados, y los últimos ingresos.
+  - Eliminación lógica con motivo: recepción solo las del día; el admin cualquiera. Auditada.
+  - Consultas por cliente, día, rango, resultado, sexo y plan (el plan de la membresía que cubría ese día).
+  - Reportes: del día, por rango, por cliente, por franja horaria, ranking y "no vienen hace N días" (con teléfono y vigencia). Cada línea de asistencia muestra su casillero. Exportación a Excel y PDF (auditada) e impresión.
+- **`servicios/alertas.py`**: crear y resolver alertas manuales (info, advertencia, crítica) con fecha final opcional. No se borran. Nuevo permiso `GESTIONAR_ALERTAS` (admin y recepción).
+- **Pantalla Recepción** (`ui/recepcion.py`), solo teclado: campo de código siempre enfocado (los botones no toman el foco), Enter registra, Enter vacío confirma el segundo ingreso, Esc cancela, F2 Renovar ahora, F3 Ingreso autorizado, F4 ficha, F6 búsqueda manual por documento o nombre, F11 pantalla completa (oculta barra y menú), Ctrl + / Ctrl − / Ctrl 0 tamaño de letra (se recuerda en el PC). Tarjeta con ícono y texto además del color. Sonido de alerta (`recursos/alerta.wav` con `winsound` en Windows) en rojo, código no encontrado y duplicado bloqueado. Lista lateral con los últimos ingresos y el contador de hoy.
+- **Pantalla Asistencia** (`ui/asistencia.py`): pestaña Registros (filtros, eliminar con motivo, registrar ingreso manual) y pestaña Reportes (vista previa, Excel, PDF, imprimir).
+- **Ficha del cliente**: pestaña Alertas con "Nueva alerta…" y "Marcar como resuelta".
+- `scripts/medir_asistencia.py`: mide Recepción y reportes sobre una copia de la base del seed.
+- Corregido: la prueba del visor de auditoría fallaba según la hora real porque `ServicioUsuarios` no usaba el reloj inyectado; ahora sí.
+- 50 pruebas nuevas (257 en total), incluido un lector USB simulado (teclas + Enter) y la ventana principal.
+
+### Resultados medidos (base de prueba con 12.000 clientes y 230.000 asistencias)
+| Operación | Filas | Peor tiempo |
+|---|---:|---:|
+| Ingreso por código (lector) | 1 | 3 ms |
+| Resumen del día (lista lateral) | 1 | 8 ms |
+| Consulta de hoy | 1.355 | 12 ms |
+| Consulta de 30 días (primera página) | 76.770 | 23 ms |
+| Reporte del día | 1.355 | 47 ms |
+| Reporte por franja (30 días) | 12 | 90 ms |
+| Ranking (30 días) | 50 | 92 ms |
+| No vienen hace 30 días | 675 | 24 ms |
+
+La consulta de 30 días tardaba ~410 ms ordenando por hora; ordenar primero por día (usa el índice `ix_asistencias_fecha`) la bajó a ~23 ms sin migración.
+
+### Decisiones
+- **Asistencia duplicada (sección 13, punto 3):** avisar y pedir confirmación (confirmado por el dueño). Configurable en Parámetros (avisar / bloquear / permitir).
+- **Saldo pendiente:** entra con aviso amarillo (aprobado en la Fase 3).
+- Los intentos rechazados (vencido o inactivo) se guardan, pero **no cuentan** como asistentes, ni en reportes, ni en el filtro "sin asistir hace N días" de Clientes. El aviso de "ya ingresó hoy" solo mira ingresos efectivos. Al autorizar o renovar, el mismo registro cambia de resultado (no se crea otro).
+- "Sin membresía" y "membresía que aún no inicia" se guardan con el resultado `vencido` (la base no tiene otro valor).
+- El ingreso autorizado aplica también a clientes inactivos (lo decide el administrador). "Renovar ahora" no aparece para inactivos.
+- Recepción consulta la asistencia de hoy o el historial de un cliente, y solo ve el reporte del día (sección 2: reportes básicos). El admin, todo, incluidas las asistencias eliminadas.
+- La franja horaria usa la hora de Bogotá (UTC−5 fijo, Colombia no tiene horario de verano).
+- No hubo cambios de tablas, así que no hay migración nueva.
+
+### Pendientes / para fases siguientes
+- Fase 5: asignar y liberar casilleros desde la ficha y Recepción (la tarjeta ya muestra el casillero y la asistencia guarda la instantánea).
+- Fase 7: estos reportes pasan también al módulo Reportes.
+- Fase 8: QR del carnet (Recepción ya acepta el `qr_token`).
+- Fase 11: empaquetar `recursos/alerta.wav` con PyInstaller.
+- Tamaño de letra ajustable: hecho en Recepción; en el resto de pantallas se agrega si se necesita (decirlo en cualquier fase).
+
 ## Fase 3 — Planes, membresías y pagos ✅ (26/11/2026)
 
 ### Qué se hizo

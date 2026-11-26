@@ -65,8 +65,9 @@ def _validar_rol(rol: str) -> str:
 
 
 class ServicioUsuarios:
-    def __init__(self, fabrica: sessionmaker[Session]):
+    def __init__(self, fabrica: sessionmaker[Session], reloj=ahora_utc):
         self._fabrica = fabrica
+        self._reloj = reloj
 
     # --- primer arranque -----------------------------------------------------
     def hay_usuarios(self) -> bool:
@@ -86,13 +87,14 @@ class ServicioUsuarios:
             nuevo = Usuario(
                 nombre_completo=nombre_completo, usuario=usuario,
                 hash_clave=claves.generar_hash(clave), rol=ROL_ADMIN, activo=True,
-                creado_en=ahora_utc(),
+                creado_en=self._reloj(),
             )
             sesion.add(nuevo)
             sesion.flush()
             auditoria.registrar(
                 sesion, "usuario_creado", "usuarios", usuario_id=nuevo.id, entidad_id=nuevo.id,
                 detalle={"usuario": usuario, "rol": ROL_ADMIN, "primer_arranque": True},
+                momento=self._reloj(),
             )
             sesion.commit()
             return a_usuario_actual(nuevo)
@@ -121,13 +123,14 @@ class ServicioUsuarios:
             nuevo = Usuario(
                 nombre_completo=nombre_completo, usuario=usuario, rol=rol, activo=True,
                 hash_clave=claves.generar_hash(clave), debe_cambiar_clave=True,
-                creado_en=ahora_utc(),
+                creado_en=self._reloj(),
             )
             sesion.add(nuevo)
             sesion.flush()
             auditoria.registrar(
                 sesion, "usuario_creado", "usuarios", usuario_id=actual.id,
                 entidad_id=nuevo.id, detalle={"usuario": usuario, "rol": rol},
+                momento=self._reloj(),
             )
             sesion.commit()
             return _a_datos(nuevo)
@@ -161,6 +164,7 @@ class ServicioUsuarios:
                 auditoria.registrar(
                     sesion, "usuario_editado", "usuarios", usuario_id=actual.id,
                     entidad_id=objetivo.id, detalle=cambios,
+                    momento=self._reloj(),
                 )
                 sesion.commit()
             return _a_datos(objetivo)
@@ -180,6 +184,7 @@ class ServicioUsuarios:
             auditoria.registrar(
                 sesion, "usuario_desactivado", "usuarios", usuario_id=actual.id,
                 entidad_id=objetivo.id, detalle={"usuario": objetivo.usuario},
+                momento=self._reloj(),
             )
             sesion.commit()
             return _a_datos(objetivo)
@@ -197,6 +202,7 @@ class ServicioUsuarios:
             auditoria.registrar(
                 sesion, "usuario_activado", "usuarios", usuario_id=actual.id,
                 entidad_id=objetivo.id, detalle={"usuario": objetivo.usuario},
+                momento=self._reloj(),
             )
             sesion.commit()
             return _a_datos(objetivo)
@@ -217,6 +223,7 @@ class ServicioUsuarios:
             auditoria.registrar(
                 sesion, "clave_restablecida", "usuarios", usuario_id=actual.id,
                 entidad_id=objetivo.id, detalle={"usuario": objetivo.usuario},
+                momento=self._reloj(),
             )
             sesion.commit()
             return _a_datos(objetivo)
