@@ -32,7 +32,7 @@ RESULTADOS = {
 NIVELES = {"info": "Información", "advertencia": "Advertencia", "critica": "Crítica"}
 ZONAS = {"hombres": "Hombres", "mujeres": "Mujeres", "mixto": "Mixto"}
 
-PESTANA_MEMBRESIAS, PESTANA_PAGOS, PESTANA_ALERTAS = 2, 3, 6
+PESTANA_MEMBRESIAS, PESTANA_PAGOS, PESTANA_CASILLERO, PESTANA_ALERTAS = 2, 3, 5, 6
 
 # Decisión al inactivar un cliente con casillero.
 LIBERAR, CONSERVAR, CANCELAR = "liberar", "conservar", "cancelar"
@@ -148,6 +148,7 @@ class DialogoFicha(QDialog):
 
         self.abrir = abrir_archivo
         self.pedir_motivo = pedir_motivo
+        self.ejecutar = lambda d: bool(d.exec())  # diálogos de casillero
         QShortcut(QKeySequence("Ctrl+R"), self, activated=self.renovar)
         self.setMinimumSize(900, 640)
         self._capa = QVBoxLayout(self)
@@ -253,21 +254,7 @@ class DialogoFicha(QDialog):
              for a in f.asistencias],
             "No tiene asistencias registradas.",
         ), f"Asistencias ({len(f.asistencias)})")
-        casillero = QWidget()
-        capa = QVBoxLayout(casillero)
-        capa.addWidget(etiqueta(
-            f"Casillero actual: {f.casillero}" if f.casillero else "No tiene casillero asignado.",
-        ))
-        capa.addWidget(_tabla_con(
-            ["Casillero", "Zona", "Asignado", "Liberado", "Motivo de liberación"],
-            [[h.numero, ZONAS.get(h.zona, h.zona),
-              celda(fecha_hora_local(h.fecha_asignacion), orden=h.fecha_asignacion),
-              fecha_hora_local(h.fecha_liberacion) if h.fecha_liberacion else "En uso",
-              h.motivo_liberacion or ""]
-             for h in f.historial_casilleros],
-            "Sin historial de casilleros.",
-        ), 1)
-        self.pestanas.addTab(casillero, "Casillero")
+        self.pestanas.addTab(self._pestana_casillero(f), "Casillero")
         activas = sum(1 for a in f.alertas if a.activa)
         barra = QHBoxLayout()
         self.boton_alerta = boton("Nueva alerta…")
@@ -291,6 +278,46 @@ class DialogoFicha(QDialog):
         )
         self.tabla_alertas = getattr(pestana, "tabla", None)
         self.pestanas.addTab(pestana, f"Alertas ({activas})")
+
+    def _pestana_casillero(self, f: FichaCliente) -> QWidget:
+        info = f.casillero_actual
+        barra = QHBoxLayout()
+        self.boton_asignar_casillero = boton("Asignar casillero…", principal=info is None)
+        self.boton_renovar_casillero = boton("Renovar casillero…", principal=info is not None)
+        self.boton_cambiar_casillero = boton("Cambiar de casillero…")
+        self.boton_liberar_casillero = boton("Liberar casillero…")
+        puede_asignar = self._actual.puede(Permiso.ASIGNAR_CASILLERO)
+        self.boton_asignar_casillero.setEnabled(puede_asignar and info is None and f.activo)
+        if not f.activo:
+            self.boton_asignar_casillero.setToolTip("El cliente está inactivo.")
+        self.boton_renovar_casillero.setEnabled(puede_asignar and info is not None)
+        self.boton_cambiar_casillero.setEnabled(puede_asignar and info is not None)
+        self.boton_liberar_casillero.setEnabled(
+            self._actual.puede(Permiso.LIBERAR_CASILLERO) and info is not None)
+        for b in (self.boton_asignar_casillero, self.boton_renovar_casillero,
+                  self.boton_cambiar_casillero, self.boton_liberar_casillero):
+            barra.addWidget(b)
+        barra.addStretch()
+        self.boton_asignar_casillero.clicked.connect(self.asignar_casillero)
+        self.boton_renovar_casillero.clicked.connect(self.renovar_casillero)
+        self.boton_cambiar_casillero.clicked.connect(self.cambiar_casillero)
+        self.boton_liberar_casillero.clicked.connect(self.liberar_casillero)
+        pestana = _tabla_con(
+            ["Casillero", "Zona", "Asignado", "Pagado hasta", "Liberado", "Liberó",
+             "Motivo de liberación"],
+            [[h.numero, ZONAS.get(h.zona, h.zona),
+              celda(fecha_hora_local(h.fecha_asignacion), orden=h.fecha_asignacion),
+              celda(fecha(h.vence) if h.vence else "", orden=h.vence),
+              fecha_hora_local(h.fecha_liberacion) if h.fecha_liberacion else "En uso",
+              h.liberado_por, h.motivo_liberacion or ""]
+             for h in f.historial_casilleros],
+            "Sin historial de casilleros.", botones=barra,
+        )
+        texto = info.aviso if info else "No tiene casillero asignado."
+        self.etiqueta_casillero = etiqueta(("⚠ " if info and info.sugerir_liberar else "") + texto)
+        self.etiqueta_casillero.setStyleSheet("font-weight: 600; font-size: 11pt;")
+        pestana.layout().insertWidget(1, self.etiqueta_casillero)
+        return pestana
 
     def _pestana_membresias(self, f: FichaCliente) -> QWidget:
         barra = QHBoxLayout()
@@ -327,7 +354,9 @@ class DialogoFicha(QDialog):
 
     def _pestana_pagos(self, f: FichaCliente) -> QWidget:
         barra = QHBoxLayout()
-        self.boton_pago = boton("Registrar pago (casillero u otro)…")
+        self.boton_pago = boton("Registrar otro pago…")
+        self.boton_pago.setToolTip("El casillero se cobra en la pestaña Casillero, al asignarlo "
+                                   "o renovarlo.")
         self.boton_recibo = boton("Ver / imprimir recibo")
         barra.addWidget(self.boton_pago)
         barra.addWidget(self.boton_recibo)
@@ -504,6 +533,59 @@ class DialogoFicha(QDialog):
             mostrar_error(self, e)
             return
         self._recargar_en(PESTANA_MEMBRESIAS)
+
+    # --- casillero ------------------------------------------------------------
+    def _dialogo_casillero(self, dialogo) -> bool:
+        if hasattr(dialogo, "abrir"):
+            dialogo.abrir = self.abrir
+        if self.ejecutar(dialogo):
+            self._recargar_en(PESTANA_CASILLERO)
+            return True
+        return False
+
+    def asignar_casillero(self) -> bool:
+        from gimnasio.ui.casilleros import DialogoAsignarCasillero
+
+        f = self.ficha
+        return self._dialogo_casillero(DialogoAsignarCasillero(
+            self._servicios, self._actual, cliente_id=f.id, nombre_cliente=f.nombre_completo,
+            sexo=f.sexo, padre=self))
+
+    def renovar_casillero(self) -> bool:
+        from gimnasio.ui.casilleros import DialogoRenovarCasillero
+
+        info = self.ficha.casillero_actual
+        if info is None:
+            return False
+        try:
+            dialogo = DialogoRenovarCasillero(self._servicios, self._actual, info.asignacion_id,
+                                              info.numero, self.ficha.nombre_completo, padre=self)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return False
+        return self._dialogo_casillero(dialogo)
+
+    def cambiar_casillero(self) -> bool:
+        from gimnasio.ui.casilleros import DialogoCambiarCasillero
+
+        info = self.ficha.casillero_actual
+        if info is None:
+            return False
+        return self._dialogo_casillero(DialogoCambiarCasillero(
+            self._servicios, self._actual, info.asignacion_id, info.numero,
+            self.ficha.nombre_completo, self.ficha.sexo, padre=self))
+
+    def liberar_casillero(self) -> bool:
+        from gimnasio.ui.casilleros import DialogoLiberarCasillero
+
+        info = self.ficha.casillero_actual
+        if info is None:
+            return False
+        motivo = ("Vencido" if info.vigencia.value == "vencido"
+                  else "Cliente inactivo" if not self.ficha.activo else "")
+        return self._dialogo_casillero(DialogoLiberarCasillero(
+            self._servicios, self._actual, info.asignacion_id, info.numero,
+            self.ficha.nombre_completo, motivo, padre=self))
 
     # --- alertas --------------------------------------------------------------
     def nueva_alerta(self) -> None:

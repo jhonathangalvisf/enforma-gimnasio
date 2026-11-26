@@ -28,7 +28,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from gimnasio import config as cfg
 from gimnasio.formato import fecha as formato_fecha
 from gimnasio.formato import pesos as _pesos
-from gimnasio.modelos import Cliente, Config, Membresia, Pago, Plan, Usuario, ahora_utc
+from gimnasio.modelos import (
+    Casillero, CasilleroAsignacion, Cliente, Config, Membresia, Pago, Plan, Usuario, ahora_utc,
+)
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
 from gimnasio.servicios.configuracion import ServicioConfiguracion
@@ -578,6 +580,10 @@ class ServicioPagos:
             obtener = lambda clave: self._configuracion.obtener(clave, sesion)  # noqa: E731
             detalle = CONCEPTOS[pago.concepto]
             precio = saldo = None
+            if pago.casillero_asignacion_id is not None:
+                asignacion = sesion.get(CasilleroAsignacion, pago.casillero_asignacion_id)
+                casillero = sesion.get(Casillero, asignacion.casillero_id)
+                detalle = f"Casillero {casillero.numero}"
             if pago.membresia_id is not None:
                 membresia = sesion.get(Membresia, pago.membresia_id)
                 plan = sesion.get(Plan, membresia.plan_id)
@@ -659,14 +665,27 @@ class ServicioPagos:
             fila.valor = str(numero + 1)
         return numero
 
+    def pago_casillero_en_sesion(
+        self, sesion: Session, actual: UsuarioActual, cliente: Cliente, datos: DatosPago,
+        asignacion_id: int, ahora: datetime,
+    ) -> PagoRegistrado:
+        """Pago de casillero dentro de la transacción del servicio de casilleros
+        (asignar o renovar y cobrar quedan juntos: o se guarda todo o nada)."""
+        exigir(actual, Permiso.REGISTRAR_PAGOS)
+        datos = _validar_pago(datos)
+        return self._crear_pago(sesion, actual, cliente, datos, "casillero", None, 0, ahora,
+                                casillero_asignacion_id=asignacion_id)
+
     def _crear_pago(
         self, sesion: Session, actual: UsuarioActual, cliente: Cliente, datos: DatosPago,
         concepto: str, membresia: Membresia | None, pagado_antes: int, ahora: datetime,
+        casillero_asignacion_id: int | None = None,
     ) -> PagoRegistrado:
         consecutivo = self._siguiente_consecutivo(sesion)
         pago = Pago(
             consecutivo=consecutivo, cliente_id=cliente.id,
             membresia_id=membresia.id if membresia else None, concepto=concepto,
+            casillero_asignacion_id=casillero_asignacion_id,
             monto=datos.monto, metodo=datos.metodo, referencia=datos.referencia or None,
             fecha_hora=ahora, usuario_id=actual.id,
         )
@@ -678,6 +697,8 @@ class ServicioPagos:
                    "monto": datos.monto, "metodo": datos.metodo}
         if saldo is not None:
             detalle["saldo"] = saldo
+        if casillero_asignacion_id is not None:
+            detalle["casillero_asignacion"] = casillero_asignacion_id
         auditoria.registrar(
             sesion, "pago_registrado", "pagos", usuario_id=actual.id, entidad_id=pago.id,
             detalle=detalle, momento=ahora,

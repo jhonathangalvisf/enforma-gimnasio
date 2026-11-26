@@ -3,13 +3,18 @@
 Regla (RN-06): un cliente tiene como máximo un casillero activo y un casillero
 pertenece como máximo a un cliente activo. Se refuerza en la base con dos
 índices únicos parciales sobre las asignaciones sin fecha de liberación.
+
+Cada asignación tiene su propio vencimiento ("pagado hasta", día local de Bogotá,
+inclusive), independiente de la membresía del cliente: el casillero puede
+asignarse o pagarse en una fecha distinta a la del plan. La vigencia del
+casillero se calcula a partir de esa fecha; nunca se guarda.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from gimnasio.modelos.base import Base, FechaHoraUTC, ahora_utc
@@ -52,6 +57,7 @@ class CasilleroAsignacion(Base):
             sqlite_where=text("fecha_liberacion IS NULL"),
         ),
         Index("ix_casillero_asignaciones_fecha_asignacion", "fecha_asignacion"),
+        Index("ix_casillero_asignaciones_fecha_liberacion", "fecha_liberacion"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -59,6 +65,8 @@ class CasilleroAsignacion(Base):
     cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"))
     fecha_asignacion: Mapped[datetime] = mapped_column(FechaHoraUTC, default=ahora_utc)
     fecha_liberacion: Mapped[datetime | None] = mapped_column(FechaHoraUTC)
+    # Último día pagado del casillero (inclusive). NULL solo en datos anteriores a la Fase 5.
+    fecha_vencimiento: Mapped[date | None] = mapped_column(Date)
     asignado_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
     liberado_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
     motivo_liberacion: Mapped[str | None] = mapped_column(String(200))

@@ -1,5 +1,48 @@
 # Progreso
 
+## Fase 5 — Casilleros ✅ (26/11/2026)
+
+### Qué se hizo
+- **Migración `0005`**: `casillero_asignaciones.fecha_vencimiento` (último día pagado, inclusive), `pagos.casillero_asignacion_id` (FK, con CHECK: solo pagos de concepto "casillero") e índice por fecha de liberación para la lista "por día".
+- **`servicios/casilleros.py`** (con permisos y auditoría en cada acción):
+  - Catálogo solo admin: crear, crear varios (rango con dígitos y prefijo, omite los existentes), editar número/zona/notas, mantenimiento con nota y habilitar. Un casillero ocupado no pasa a mantenimiento ni a una zona que no corresponda al sexo de quien lo ocupa.
+  - Asignar con **vencimiento propio**: desde, días (por defecto 30) y pago opcional en la misma transacción (recibo de concepto "Casillero 015"). Si el pago falla no queda la asignación.
+  - Renovar: si sigue al día, el periodo nuevo empieza el día siguiente al vencimiento; si ya venció, empieza hoy. No permite acortar.
+  - Cambiar de casillero conservando lo pagado (la asignación anterior queda en el historial con "Cambio al casillero X").
+  - Liberar con motivo (vencido, ya no lo quiere, cliente inactivo u otro con detalle). No se borra nada.
+  - Corregir vencimiento (solo admin, con motivo), por ejemplo tras anular un pago de casillero.
+  - Consultas: de quién es un casillero (historial), qué casillero tiene un cliente, libres por zona compatible.
+  - Listas (RF-L5): por estado, zona, sexo del ocupante, casilleros vencidos (con días), por vencer, clientes con membresía vencida o sin membresía, **sugeridos para liberar**, y asignados/liberados por día. Exportación a Excel y PDF (auditada) e impresión.
+- **Zonas por sexo** (decisión del dueño): hombres solo M, mujeres solo F, mixto para todos (sexo "Otro" solo mixto). Se bloquea en el servicio.
+- **Sugerencia de liberar** (RF-L7): cliente inactivo o casillero vencido hace más de N días (parámetro `casillero_dias_liberar`, 15 por defecto). Se muestra en la lista, la ficha y Recepción; nunca se libera solo. Al inactivar un cliente sigue la pregunta de la Fase 2 (liberar o conservar).
+- **Recepción**: la tarjeta muestra "Casillero 015 pagado hasta…", "vence en N días" o "vencido hace N días · sugerido liberar". Si la membresía está vigente pero el casillero vencido, la tarjeta pasa a amarillo ("BIENVENIDO · CASILLERO VENCIDO") y deja entrar. La instantánea del casillero en cada asistencia (RN-11) sigue igual.
+- **Pantalla Casilleros** (`ui/casilleros.py`): totales (disponibles, ocupados, mantenimiento, vencidos, sugeridos), filtros, búsqueda por número o cliente, Asignar (busca el cliente), Renovar, Cambiar, Liberar, Historial, Ficha; para el admin además Nuevo, Crear varios, Editar, Mantenimiento y Corregir vencimiento. Doble clic asigna o renueva. Pestaña "Asignados y liberados por día".
+- **Ficha del cliente**: pestaña Casillero con Asignar (solo ofrece casilleros de su zona), Renovar, Cambiar, Liberar y el historial con "pagado hasta" y quién liberó.
+- Parámetros nuevos (grupo Casilleros): días que cubre el pago (30), precio sugerido (0 = sin precio) y días para sugerir liberar (15).
+- `scripts/seed_datos.py`: asignaciones con vencimiento (algunas vencidas) y zonas coherentes con el sexo.
+- 36 pruebas nuevas (293 en total): reglas puras, catálogo, permisos, zonas, un cliente ↔ un casillero desde el servicio, pago todo-o-nada, renovar, cambiar, liberar, listas, sugerencias, exportación, Recepción y pantallas.
+
+### Resultados medidos (base de prueba con 12.000 clientes y 240 casilleros)
+| Operación | Peor tiempo |
+|---|---:|
+| Lista completa de casilleros | 49 ms |
+| Vencidos / membresía vencida / búsqueda | ~10 ms |
+| Resumen (totales) | 10 ms |
+| Tarjeta de Recepción con casillero | 9 ms |
+
+### Decisiones
+- **Sección 13, punto 1:** "por día" = asignados o liberados en una fecha; "vencidos" = casilleros con su propio vencimiento pasado (y aparte, la lista de clientes con membresía vencida). **El casillero tiene vencimiento propio**, independiente de la membresía (confirmado por el dueño).
+- **Sección 13, punto 2:** zonas hombres / mujeres / mixto según el sexo del cliente (confirmado por el dueño).
+- "Eliminar" un casillero de un cliente = **liberar** (queda historial con fecha, usuario y motivo). Los casilleros del catálogo no se borran: se ponen en mantenimiento.
+- El cobro del casillero se hace al asignarlo o renovarlo, para que el pago corra la fecha. El diálogo "Registrar pago" de la ficha ahora solo ofrece "Otro".
+- Anular un pago de casillero no cambia la fecha automáticamente: el admin usa "Corregir vencimiento" con motivo.
+- Las asignaciones anteriores a la Fase 5 quedan "sin fecha" hasta que se renueven (no hay datos reales todavía).
+- Para "por vencer" del casillero se usa el mismo umbral de días que las membresías.
+
+### Pendientes / para fases siguientes
+- Reportes generales de casilleros dentro del módulo Reportes (Fase 7) reutilizando `ServicioCasilleros.listado`.
+- Contenido de ayuda del módulo Casilleros (Fase 8).
+
 ## Fase 4 — Recepción y asistencia ✅ (26/11/2026)
 
 ### Qué se hizo

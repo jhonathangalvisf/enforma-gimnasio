@@ -194,7 +194,11 @@ class TarjetaRecepcion(QFrame):
         self.detalle.setText("   ·   ".join(partes))
         self.mensaje.setText(t.mensaje)
         self.mensaje.show()
-        extra = [f"Casillero {t.casillero}" if t.casillero else "Sin casillero"]
+        if t.casillero:
+            extra = [("⚠ " if t.casillero_sugerir_liberar else "") + (
+                t.casillero_aviso or f"Casillero {t.casillero}")]
+        else:
+            extra = ["Sin casillero"]
         if t.cumple_hoy:
             extra.append("🎂 ¡Hoy cumple años! Felicítelo.")
         self.extra.setText("   ·   ".join(extra))

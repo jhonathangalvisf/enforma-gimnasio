@@ -86,6 +86,8 @@ class TarjetaIngreso:
     titulo: str
     mensaje: str
     resultado: str
+    casillero_aviso: str = ""  # vencimiento del casillero (o "sugerido liberar")
+    casillero_sugerir_liberar: bool = False
 
     @property
     def nombre_completo(self) -> str:
@@ -705,12 +707,10 @@ class ServicioAsistencia:
         else:
             plan = membresias[0][1] if membresias else ""
 
-        casillero = sesion.scalar(
-            select(Casillero.numero)
-            .join(CasilleroAsignacion, CasilleroAsignacion.casillero_id == Casillero.id)
-            .where(CasilleroAsignacion.cliente_id == cliente.id,
-                   CasilleroAsignacion.fecha_liberacion.is_(None))
-        )
+        from gimnasio.servicios.casilleros import VigenciaCasillero, casillero_de_cliente
+
+        info_casillero = casillero_de_cliente(sesion, self._configuracion, cliente.id, hoy)
+        casillero = info_casillero.numero if info_casillero else None
         saldo = saldo_pendiente_cliente(sesion, cliente.id)
         nacimiento = cliente.fecha_nacimiento
         cumple = bool(nacimiento and (nacimiento.month, nacimiento.day) == (hoy.month, hoy.day))
@@ -746,6 +746,9 @@ class ServicioAsistencia:
             mensaje = f"Plan vigente hasta el {formato_fecha(fin)} ({dias} días)."
         if color == VERDE and saldo:
             color, titulo = AMARILLO, "BIENVENIDO · SALDO PENDIENTE"
+        if (color == VERDE and info_casillero
+                and info_casillero.vigencia == VigenciaCasillero.VENCIDO):
+            color, titulo = AMARILLO, "BIENVENIDO · CASILLERO VENCIDO"
         if saldo and resultado in EFECTIVOS:
             mensaje += f" Saldo pendiente: {pesos(saldo)}."
 
@@ -753,7 +756,9 @@ class ServicioAsistencia:
             cliente_id=cliente.id, codigo=cliente.codigo, nombres=cliente.nombres,
             apellidos=cliente.apellidos, foto=foto, estado=cliente.estado, vigencia=vigencia,
             plan=plan, fecha_fin=fin, dias_restantes=dias, inicio_futuro=inicio_futuro,
-            casillero=casillero, saldo_pendiente=saldo, cumple_hoy=cumple,
+            casillero=casillero, casillero_aviso=info_casillero.aviso if info_casillero else "",
+            casillero_sugerir_liberar=bool(info_casillero and info_casillero.sugerir_liberar),
+            saldo_pendiente=saldo, cumple_hoy=cumple,
             alertas=alertas_activas(sesion, cliente.id, hoy), color=color, titulo=titulo,
             mensaje=mensaje, resultado=resultado,
         )

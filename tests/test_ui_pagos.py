@@ -85,10 +85,12 @@ def test_registrar_sin_pago(qapp, servicios, recepcion, plan, cliente):
     assert d.resultado.pago is None and d.resultado.saldo == 120_000
 
 
-def test_dialogo_pago_casillero(qapp, servicios, recepcion, cliente):
+def test_dialogo_pago_suelto_es_otro_concepto(qapp, servicios, recepcion, cliente):
+    """El casillero ya no se cobra aquí: se cobra al asignarlo o renovarlo (Fase 5)."""
     d = DialogoPago(servicios, recepcion, cliente)
     d.abrir_recibo.setChecked(False)
-    d.campo_concepto.setCurrentIndex(d.campo_concepto.findData("casillero"))
+    assert d.campo_concepto.findData("casillero") == -1
+    assert d.campo_concepto.currentData() == "otro"
     d.pago.monto.setValue(15_000)
     d.guardar()
     assert d.resultado.monto == 15_000 and d.resultado.saldo_despues is None
