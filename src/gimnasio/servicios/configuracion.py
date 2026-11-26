@@ -59,6 +59,12 @@ PARAMETROS: tuple[Parametro, ...] = (
               ayuda="Recepción y la lista de casilleros marcan «sugerido liberar» cuando el "
                     "casillero lleva más de estos días vencido. Nunca se libera solo.",
               grupo="Casilleros"),
+    Parametro("invitado_visitas_mes", "Máximo de visitas de un invitado al mes", "entero", 0,
+              0, 31,
+              ayuda="0 = sin límite. Si un invitado llega al máximo en el mes, se avisa y la "
+                    "visita necesita la contraseña de un administrador. Los invitados no pagan "
+                    "y no hay límite de invitados por cliente.",
+              grupo="Invitados"),
     Parametro("minutos_inactividad", "Cerrar sesión tras minutos sin uso", "entero",
               cfg.MINUTOS_INACTIVIDAD, 1, 240,
               ayuda="No aplica a la pantalla de Recepción, que permanece abierta.",

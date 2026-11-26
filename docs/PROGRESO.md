@@ -1,5 +1,43 @@
 # Progreso
 
+## Fase 6 — Invitados ✅ (26/11/2026)
+
+### Qué se hizo
+- **Migración `0006`**: `invitados.busqueda` (nombre sin tildes, se llena al guardar y para los existentes), `invitado_asistencias.eliminada_por`, `eliminada_en` y `autorizada_por` (FK a usuarios) e índice por cliente anfitrión.
+- **`servicios/invitados.py`** (permisos y auditoría en el servicio):
+  - Registrar invitado (nombre, documento, teléfono). El documento se normaliza (sin puntos, espacios ni guiones) y es único: si ya existe **se reutiliza el mismo registro** (completa el teléfono si faltaba). Avisa si el documento es de un cliente.
+  - Corregir nombre y teléfono (Recepción); cambiar el documento solo el administrador.
+  - Registrar visita (fecha/hora, usuario y, opcional, el cliente anfitrión). Si ya vino hoy se usa el mismo parámetro de Recepción (`asistencia_duplicada`: avisar y confirmar por defecto).
+  - **Contador de visitas** (pedido del dueño, RN-10): nunca se guarda, se cuenta desde `invitado_asistencias` sin las eliminadas. La ficha trae total, visitas del mes, primera y última visita y el detalle de cada fecha (hora, anfitrión, quién la registró y quién autorizó).
+  - Eliminar visita con motivo (lógica). Recepción solo las de hoy; el admin cualquiera y es el único que ve las eliminadas.
+  - Búsqueda por nombre (sin tildes), documento o teléfono; lista con total, visitas del mes y última visita.
+  - Reportes (RF-I5): visitas por rango (opcional: solo las de un cliente anfitrión), visitas por invitado (en el periodo y en total) e invitados por cliente anfitrión. Excel, PDF e impresión (auditados). Recepción solo ve las visitas de hoy.
+- **Pantalla Invitados** (`ui/invitados.py`), solo con teclado: documento + Enter (si existe muestra "lleva N visitas", si es nuevo pide el nombre) → teléfono → anfitrión (código o nombre + Enter) → registra. Lista con búsqueda instantánea; doble clic abre la **ficha con el contador grande y la tabla de fechas**. Pestaña Reportes.
+- Parámetro nuevo (grupo Invitados): **máximo de visitas de un invitado al mes**, 0 = sin límite (valor por defecto). Al llegar al máximo se avisa y la visita necesita usuario y contraseña de un administrador (si el admin tiene la sesión abierta, autoriza directamente); queda en la auditoría.
+- `scripts/medir_invitados.py` y el seed llena `invitados.busqueda`.
+- 31 pruebas nuevas (324 en total): reutilización por documento y contador que aumenta (criterio 7 de la sección 12), detalle de fechas, duplicado, límite y autorización, eliminación, permisos, reportes, exportación y pantallas.
+
+### Resultados medidos (base de prueba con 12.000 clientes, 800 invitados y 1.830 visitas)
+| Operación | Peor tiempo |
+|---|---:|
+| Documento + Enter (ficha con contador) | 4 ms |
+| Registrar visita | 4 ms |
+| Lista de invitados / búsqueda | 6 ms |
+| Reporte de visitas (90 días) | 19 ms |
+| Reportes por invitado y por anfitrión (90 días) | 7 ms |
+
+### Decisiones
+- **Los invitados no pagan** y **no hay límite de invitados por cliente** (respuesta del dueño, sección 13 punto 4 y RF-I6).
+- El límite por persona quedó como parámetro apagado (0); quien autoriza al pasarlo es un administrador.
+- El anfitrión es opcional. Un invitado no puede ser su propio anfitrión (mismo documento).
+- Las visitas de invitados no cuentan en la asistencia de clientes ni en sus reportes.
+- Capturas en `/mnt/project-files/fase6/`.
+
+### Pendientes / para fases siguientes
+- Fase 7 (Reportes): sumar los reportes de invitados al módulo general de reportes.
+- Fase 8 (Ayuda): texto de ayuda del módulo Invitados.
+- Si el dueño quiere más adelante cobrar a los invitados, se necesita permitir pagos sin cliente (hoy `pagos.cliente_id` es obligatorio).
+
 ## Fase 5 — Casilleros ✅ (26/11/2026)
 
 ### Qué se hizo

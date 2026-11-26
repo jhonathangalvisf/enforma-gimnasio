@@ -65,6 +65,11 @@ ACCIONES = {
     "alerta_creada": "Alerta creada",
     "alerta_resuelta": "Alerta resuelta",
     "asistencias_exportadas": "Reporte de asistencia exportado",
+    "invitado_registrado": "Invitado registrado",
+    "invitado_modificado": "Invitado modificado",
+    "invitado_visita_autorizada": "Visita de invitado autorizada por encima del límite",
+    "invitado_visita_eliminada": "Visita de invitado eliminada",
+    "invitados_exportados": "Reporte de invitados exportado",
 }
 
 _CAMPOS_PROHIBIDOS = {"clave", "hash_clave", "contrasena", "password"}

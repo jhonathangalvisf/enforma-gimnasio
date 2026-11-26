@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Index, Integer, String, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from gimnasio.modelos.base import Base, FechaHoraUTC, ahora_utc
+from gimnasio.texto import normalizar
 
 
 class Invitado(Base):
@@ -20,6 +21,14 @@ class Invitado(Base):
     telefono: Mapped[str | None] = mapped_column(String(30))
     creado_en: Mapped[datetime] = mapped_column(FechaHoraUTC, default=ahora_utc)
     creado_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    # Nombre en minúsculas y sin tildes, para buscar rápido. Se calcula al guardar.
+    busqueda: Mapped[str] = mapped_column(String(160), default="", server_default="")
+
+
+@event.listens_for(Invitado, "before_insert")
+@event.listens_for(Invitado, "before_update")
+def _actualizar_busqueda(_mapper, _conexion, invitado: Invitado) -> None:
+    invitado.busqueda = normalizar(invitado.nombre)
 
 
 class InvitadoAsistencia(Base):
@@ -31,6 +40,7 @@ class InvitadoAsistencia(Base):
         ),
         Index("ix_invitado_asistencias_invitado_id", "invitado_id"),
         Index("ix_invitado_asistencias_fecha", "fecha"),
+        Index("ix_invitado_asistencias_cliente_anfitrion_id", "cliente_anfitrion_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -41,3 +51,7 @@ class InvitadoAsistencia(Base):
     usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
     eliminada: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     motivo_eliminacion: Mapped[str | None] = mapped_column(String(200))
+    eliminada_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    eliminada_en: Mapped[datetime | None] = mapped_column(FechaHoraUTC)
+    # Administrador que autorizó la visita cuando el invitado ya llegó al límite del mes.
+    autorizada_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))

@@ -23,6 +23,7 @@ from gimnasio.ui.configuracion import PantallaConfiguracion
 from gimnasio.ui.dialogos import DialogoCambiarClave
 from gimnasio.ui.asistencia import PantallaAsistencia
 from gimnasio.ui.casilleros import PantallaCasilleros
+from gimnasio.ui.invitados import PantallaInvitados
 from gimnasio.ui.pagos import PantallaPagos
 from gimnasio.ui.recepcion import PantallaRecepcion
 
@@ -48,7 +49,7 @@ MODULOS: tuple[Modulo, ...] = (
     Modulo("casilleros", "Casilleros", Permiso.ASIGNAR_CASILLERO,
            "Asignación, renovación, liberación e historial de casilleros."),
     Modulo("invitados", "Invitados", Permiso.REGISTRAR_INVITADOS,
-           "Registro de invitados y conteo de visitas.", 6),
+           "Registro de invitados y conteo de visitas."),
     Modulo("pagos", "Pagos", Permiso.REGISTRAR_PAGOS,
            "Membresías, pagos, recibos y cierre de caja."),
     Modulo("reportes", "Reportes", Permiso.REPORTES_BASICOS,
@@ -129,6 +130,7 @@ class VentanaPrincipal(QMainWindow):
         self.pantalla_recepcion: PantallaRecepcion | None = None
         self.pantalla_asistencia: PantallaAsistencia | None = None
         self.pantalla_casilleros: PantallaCasilleros | None = None
+        self.pantalla_invitados: PantallaInvitados | None = None
         self.ficha_abierta: DialogoFicha | None = None
         self._indices: dict[str, int] = {}
         for modulo in MODULOS:
@@ -205,6 +207,9 @@ class VentanaPrincipal(QMainWindow):
             self.pantalla_casilleros = PantallaCasilleros(self._servicios, self.actual)
             self.pantalla_casilleros.abrir_ficha.connect(self.abrir_ficha)
             return self.pantalla_casilleros
+        if modulo.clave == "invitados":
+            self.pantalla_invitados = PantallaInvitados(self._servicios, self.actual)
+            return self.pantalla_invitados
         return PantallaProximamente(modulo)
 
     # --- acciones -----------------------------------------------------------

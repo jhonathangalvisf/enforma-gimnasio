@@ -14,6 +14,7 @@ from gimnasio.servicios.auditoria import ServicioAuditoria
 from gimnasio.servicios.casilleros import ServicioCasilleros
 from gimnasio.servicios.clientes import ServicioClientes
 from gimnasio.servicios.configuracion import ServicioConfiguracion
+from gimnasio.servicios.invitados import ServicioInvitados
 from gimnasio.servicios.pagos import ServicioPagos
 from gimnasio.servicios.planes import ServicioPlanes
 from gimnasio.servicios.sesion import Reloj, ServicioSesion
@@ -32,6 +33,7 @@ class Servicios:
     asistencia: ServicioAsistencia
     alertas: ServicioAlertas
     casilleros: ServicioCasilleros
+    invitados: ServicioInvitados
 
 
 def crear_servicios(
@@ -51,4 +53,5 @@ def crear_servicios(
         asistencia=ServicioAsistencia(fabrica, configuracion, sesion, carpeta_datos, reloj),
         alertas=ServicioAlertas(fabrica, reloj),
         casilleros=ServicioCasilleros(fabrica, configuracion, pagos, carpeta_datos, reloj),
+        invitados=ServicioInvitados(fabrica, configuracion, sesion, carpeta_datos, reloj),
     )
