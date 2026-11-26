@@ -15,7 +15,7 @@ Pedido del dueño: en el menú Pagos, consultas por cliente y por fecha de pago,
   - La numeración de recibos **no se reutiliza**: antes de borrar se fija `recibo_siguiente` al mayor consecutivo + 1.
   - Todo en una transacción y en la auditoría (`pagos_depurados`: corte, motivo, cantidades, total, rutas del Excel y de la copia, siguiente recibo). La auditoría no se borra.
 - Ayuda de Pagos actualizada.
-- 16 pruebas nuevas (442 en total): consultas por cliente, fecha y método, permisos de Recepción, anulados, límite, exportación, clave de seguridad (crear, cambiar, bloqueo), borrado con vigencia/saldo/consecutivo intactos, última membresía conservada, exigencias (admin, clave, fecha, motivo) y copia fallida sin borrar; y las pantallas.
+- 16 pruebas nuevas (483 en total junto con las Fases 11 y la mejora de clientes; 6 omitidas fuera de Windows): consultas por cliente, fecha y método, permisos de Recepción, anulados, límite, exportación, clave de seguridad (crear, cambiar, bloqueo), borrado con vigencia/saldo/consecutivo intactos, última membresía conservada, exigencias (admin, clave, fecha, motivo) y copia fallida sin borrar; y las pantallas.
 
 ### Decisiones
 - **Excepción a RN-07** aprobada por el dueño: los pagos y membresías se siguen anulando (no borrando) en la operación diaria; el único borrado posible es esta depuración por fecha, protegida con clave, con copia y Excel previos y registrada en la auditoría.
@@ -23,6 +23,82 @@ Pedido del dueño: en el menú Pagos, consultas por cliente y por fecha de pago,
 
 ### Pendientes
 - Ninguno conocido. Con 100.000 pagos la base pesa 60 MB y el cierre de caja tarda 6,5 ms, así que el borrado es para orden, no por rendimiento.
+
+## Clientes: códigos, vigencia a mano y clientes al día ✅ (26/11/2026)
+
+### Qué se hizo
+- **Código consecutivo + manual** (`servicios/clientes.py`): el formulario sugiere el consecutivo guardado en el parámetro `codigo_siguiente` (tabla `config`, sin migración). Al usarlo, el consecutivo avanza; los códigos ya usados se saltan. Solo el administrador puede escribir otro código (p. ej. 005000 para un cliente antiguo): no mueve el consecutivo, así que el siguiente cliente nuevo sigue en el orden normal. Con el parámetro en 0 se sigue después del código más alto (bases existentes); el primer código manual fija el consecutivo para que no lo arrastre.
+- **Cambiar código** (`cambiar_codigo`, solo admin): desde Modificar datos. Debe estar libre; el código viejo deja de funcionar y queda en la auditoría (`cliente_codigo_cambiado`, antes/después).
+- **Un cliente, un código:** inscribir un documento ya registrado lanza `ErrorDocumentoRegistrado` con nombre, código y estado. El formulario avisa, abre la ficha y, si estaba inactivo y es admin, lo reactiva con su código antiguo (Recepción debe pedírselo al admin).
+- **Cambiar vigencia a mano** (`cambiar_vigencia`, solo admin, botón en la ficha): ajusta la fecha fin de la última membresía activa (alargar o acortar, no antes del inicio), con motivo obligatorio. Sin membresías, pide plan y crea una sin cobro. Auditoría `cliente_vigencia_cambiada` con fechas y motivo. Es la excepción a RN-03.
+- **Clientes al día:** barra de totales en Clientes (Al día = vigentes + por vencer, Por vencer, Vencidos, Sin membresía, Inactivos, Total; cada uno filtra la lista) con `ServicioClientes.resumen` (una sola consulta, ~50 ms con 12.000 clientes) y filtro de vigencia "Al día".
+- Búsqueda por nombre o cédula para quien no recuerda su código: ya existía; se documentó en la ayuda.
+- Ayuda (Clientes y Configuración) y RN-01/RN-03 de la especificación actualizadas.
+- 18 pruebas nuevas (servicio y pantallas). Total: 441 pasan. Búsquedas con 12.000 clientes: peor 77 ms (meta < 200 ms).
+
+### Decisiones
+- El consecutivo vive en `config` y no en una tabla nueva: no hace falta migración.
+- Asignar código manual, cambiar código y cambiar vigencia son solo del administrador (permiso `MODIFICAR_CLIENTE_COMPLETO`).
+- Cambiar la vigencia no crea pagos ni cambia el precio pactado; la auditoría guarda la historia.
+
+### Pendientes
+- Casillero al inscribir y pago de casillero desde Pagos (pedido nuevo, PR aparte).
+
+## Fase 11 — Instalador y puesta en marcha ✅ (26/11/2026)
+
+> La Fase 10 (importar datos del software actual) se saltó por ahora: el dueño todavía no tiene las exportaciones. El carnet con QR también sigue pendiente.
+
+### Qué se hizo
+- **Rutas dentro del ejecutable** (`gimnasio/rutas.py`): migraciones, ayuda, sonido, ícono y logo se buscan en la carpeta interna de PyInstaller (`sys._MEIPASS`) o en el proyecto. `db/migraciones.py` ya no lee `alembic.ini` (tiene tildes y en Windows Python lo leería con la codificación del sistema; con `LANG=C` el .exe fallaba al migrar). `alembic.ini` sigue para la línea de comandos.
+- **PyInstaller** (`empaquetado/enforma.spec`): modo carpeta (arranca rápido y menos falsos positivos de antivirus), sin consola, sin UPX, ícono y propiedades del .exe con la versión. Incluye migraciones, ayuda, recursos, `tzdata`, fuentes de reportlab y los submódulos de Alembic/SQLAlchemy que las migraciones importan en tiempo de ejecución. Nuevo `gimnasio/__main__.py` como punto de entrada.
+- **Instalador Inno Setup** (`empaquetado/enforma.iss`, en español): `C:\Program Files\Enforma`, accesos directos en el menú Inicio (Enforma, Manual de instalación y respaldo, Diagnóstico de Enforma, Desinstalar) y en el escritorio (opcional), pide cerrar Enforma si está abierto (`AppMutex`), al actualizar borra solo `_internal` de la versión anterior, abre Enforma al final con el usuario que instaló (no como administrador) y el desinstalador avisa que los datos no se borran. `AppId` fijo para que las versiones nuevas actualicen la misma instalación.
+- **Datos fuera de la instalación:** siguen en `%APPDATA%\Enforma` (Fase 0). Instalar, actualizar o desinstalar nunca los toca (probado en el workflow).
+- **Instancia única** (`ui/instancia.py`): candado `QLockFile` en la carpeta de datos + canal `QLocalServer`. Una segunda copia avisa a la abierta, que trae al frente su ventana (inicio de sesión o principal, también si estaba minimizada) y se cierra. Un candado de un programa que se cerró mal se libera solo. En Windows crea el mutex `EnformaGimnasioAplicacion` que usa el instalador.
+- **Ícono y logo** a partir del logo del gimnasio que envió el dueño: `recursos/enforma.ico` (16 a 256 px, "en" con la figura en blanco sobre el azul del logo), ventana y barra de tareas (con `AppUserModelID` propio). `recursos/logo_enforma.png` es el **logo por defecto de los recibos** si el admin nunca eligió otro; si lo quita, no hay logo.
+- **Versión 1.0.0** en `gimnasio/__init__.py` (única fuente: `pyproject.toml` la lee de ahí). Se ve en el inicio de sesión y en la barra de estado.
+- **Registro de errores** (`gimnasio/registro.py`): `<datos>/logs/enforma.log` (1 MB × 5, rota solo) con arranque, versión, migraciones, copias y errores inesperados (tipo, mensaje recortado y archivo/línea del código, **sin variables ni datos de clientes**); `fallos.log` con `faulthandler` para caídas dentro de Qt. Un error no atrapado muestra un mensaje en lugar de cerrar el programa sin decir nada. Si la base no se puede preparar, avisa y no abre.
+- **Diagnóstico** (`gimnasio/diagnostico.py`, `Enforma.exe --diagnostico`, acceso directo en el menú Inicio y `scripts/diagnostico.py`): versión, archivos del programa, zona horaria, carpeta de datos, base (integridad y esquema), **prueba real de DPAPI**, contraseña de copias guardada y protegida, y verificación de la última copia en una carpeta temporal. Guarda el informe en `logs/diagnostico.txt`. `verificar_backup.py` comparte sus funciones.
+- **Prueba de humo** (`gimnasio/prueba_humo.py`, `Enforma.exe --prueba-humo`): sobre el .exe ya empaquetado y en una carpeta temporal con datos inventados, prueba migraciones, argon2, cliente + membresía + abono, ingreso en Recepción, recibo PDF, reportes Excel y PDF, copia cifrada y verificada, los 11 temas de ayuda, la ventana principal de Qt y DPAPI.
+- **GitHub Actions** (`.github/workflows/windows.yml`, `windows-latest`): job de **pruebas** (toda la suite en Windows, incluidas las de DPAPI real) y job de **instalador**: manual en PDF → PyInstaller → prueba de humo del .exe → Inno Setup → instala en silencio → revisa archivos y accesos directos → `--solo-migrar`, `--diagnostico` (exige "Protección DPAPI: funciona") y prueba de humo del programa instalado → instancia única con la interfaz abierta → desinstala y comprueba que los datos siguen. Sube el instalador como artifact (90 días) y, con una etiqueta `vX.Y.Z`, lo publica como Release.
+- **`construir.bat`**: lo mismo en el PC del dueño con doble clic (crea `.venv`, instala, manual, PyInstaller, prueba de humo, Inno Setup si está instalado).
+- **Manual de instalación y respaldo** (`docs/MANUAL_INSTALACION.md`, va en PDF dentro del instalador con `empaquetado/manual_pdf.py`): requisitos, instalar (aviso de SmartScreen), primer arranque, copias de seguridad, diagnóstico y **pasos para verificar DPAPI en el PC del gimnasio**, verificar y restaurar, cambio de computador, actualizar, desinstalar, dónde están los datos, problemas frecuentes, prueba en Windows Sandbox y puesta en marcha en paralelo.
+- Ayuda: el tema Copias de seguridad menciona el Diagnóstico.
+- `tests/test_dpapi_windows.py` (6 pruebas, solo Windows): proteger/recuperar, archivo sin la clave en claro, archivo alterado, entropía propia de Enforma, diagnóstico y servicio de copias con DPAPI. `tests/test_instalacion.py` (24 pruebas): rutas en desarrollo y empaquetado, versión, contenido del spec, del .iss y del workflow, registro de errores sin variables locales, instancia única (dos copias, carpetas distintas, candado abandonado), traer al frente, versión visible, logo por defecto, diagnóstico (instalación nueva, base, última copia buena y dañada, clave ilegible, archivos faltantes), `main --diagnostico` y `--solo-migrar`, y el manual en PDF. **448 pruebas pasan en Linux** (+6 de DPAPI que solo corren en Windows).
+
+### Verificado en Linux (el .exe de Windows lo construye el workflow)
+- El mismo spec empaquetado para Linux: `--solo-migrar`, `--diagnostico` y `--prueba-humo` pasan **sin Python del sistema y con `LANG=C`** (así apareció el problema de `alembic.ini`); con la interfaz abierta, una segunda copia se cierra en 0,9 s y la primera queda registrada como "ya estaba abierto".
+
+### Primera corrida en Windows (GitHub Actions)
+- **Instalador:** todo en verde: PyInstaller, prueba de humo del .exe, Inno Setup, instalación silenciosa, diagnóstico con **"Protección DPAPI: funciona"**, prueba de humo del programa instalado, instancia única con la interfaz abierta y desinstalación conservando los datos.
+- **Pruebas:** 451 de 455 pasaron; las 6 de DPAPI real pasaron. Las 4 que fallaron eran **errores reales de la Fase 9 que solo aparecen en Windows**, ya corregidos:
+  - **Restaurar una copia fallaba en Windows:** la URL de la base trae `C%3A/...` y Alembic la guarda en configparser, que trata el `%` como interpolación. Ahora se escapa (`db/migraciones.py`) y hay una prueba con una URL de Windows.
+  - `verificar_backup.py` dejaba abierta la base temporal (`with sqlite3.connect()` no cierra la conexión) y Windows no dejaba borrarla. Ahora usa `closing()`, igual que el diagnóstico.
+
+### Criterios de aceptación (sección 12)
+| # | Criterio | Estado | Cómo se comprueba |
+|---|---|---|---|
+| 1 | Búsquedas < 200 ms con 12.000 clientes | ✅ | `test_rendimiento_clientes.py` en cada ejecución (peor caso medido 52 ms) y `scripts/medir_busqueda.py` |
+| 2 | Casillero duplicado falla incluso en la base | ✅ | Índices únicos parciales; `test_casilleros.py` (ORM y SQL directo) y `test_servicio_casilleros.py` |
+| 3 | Tarjeta roja con sonido, amarilla ≤ 5 días con fecha, verde | ✅ | `test_asistencia.py` (verde, amarillo, rojo) y `test_ui_recepcion.py`; el sonido va en el .exe y la prueba de humo revisa que exista |
+| 4 | Recepción no anula pagos ni inactiva clientes; el admin sí, auditado | ✅ | `test_pagos.py::test_anular_pago_solo_admin_con_motivo`, `test_clientes.py`, `test_permisos.py` |
+| 5 | Pago anulado no suma en caja pero se ve con motivo | ✅ | `test_pagos.py::test_cierre_de_caja` |
+| 6 | Reporte de asistencia con el casillero de ese día aunque se libere | ✅ | `test_asistencia.py::test_instantanea_del_casillero_no_cambia_al_liberar` |
+| 7 | Invitado con el mismo documento no se duplica y su contador sube | ✅ | `test_invitados.py::test_mismo_documento_no_duplica_y_el_contador_aumenta` |
+| 8 | Backup se crea, cifra, restaura en temporal y pasa `integrity_check` | ✅ | `test_backups.py::test_ida_y_vuelta_crear_cifrar_restaurar_comparar`; también la prueba de humo y el diagnóstico sobre el .exe |
+| 9 | Todas las pantallas con Ayuda y F1 correcta | ✅ | `test_ui_ayuda.py` (F1 en cada módulo, en diálogos modales y en Usuarios) |
+| 10 | El instalador funciona en un Windows limpio sin Python | ⏳ | El workflow instala y prueba el .exe en `windows-latest` (el .exe lleva su propio Python, no usa el del runner). La confirmación final en un Windows **realmente** limpio (Windows Sandbox o el PC del gimnasio) la hace el dueño con la sección 12 del manual |
+
+### Decisiones
+- **Datos por cuenta de Windows** (`%APPDATA%\Enforma`, recomendado en el plan, sin objeción del dueño): el PC del gimnasio debe usar siempre la misma cuenta. Así lo dice el manual.
+- **Instalador sin firma digital** (recomendado en el plan, sin objeción): Windows muestra "editor desconocido"; el manual explica "Más información → Ejecutar de todas formas".
+- **Instalación para todos los usuarios en Program Files** (pide administrador una vez); el programa corre como usuario normal.
+- **Modo carpeta** en lugar de un solo .exe; **sin UPX**.
+- **Diagnóstico en el propio .exe** en lugar de un `verificar_dpapi.py` suelto: el PC del gimnasio no tiene Python. `scripts/diagnostico.py` hace lo mismo en desarrollo.
+- El logo del gimnasio queda como logo por defecto de los recibos.
+
+### Pendientes
+- **En el PC del gimnasio:** instalar, abrir el Diagnóstico y seguir "Verificar la protección de la contraseña (DPAPI)" del manual; probar en Windows Sandbox si es Windows Pro (criterio 10).
+- Fase 10 (importador) cuando el dueño tenga las exportaciones; carnet con QR cuando lo pida; Fase 12 (huella) opcional.
 
 ## Fase 9 — Copias de seguridad y restauración ✅ (26/11/2026)
 

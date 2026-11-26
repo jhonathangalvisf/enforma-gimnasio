@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
+from gimnasio import __version__
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
 from gimnasio.servicios.sesion import ControlInactividad
@@ -173,6 +174,9 @@ class VentanaPrincipal(QMainWindow):
         self.navegacion.currentRowChanged.connect(self._al_cambiar_modulo)
         self.navegacion.setCurrentRow(0)
         self.statusBar().showMessage(f"Bienvenido, {actual.nombre_completo}.", 5000)
+        self.etiqueta_version = QLabel(f"Enforma {__version__}")
+        self.etiqueta_version.setObjectName("textoSuave")
+        self.statusBar().addPermanentWidget(self.etiqueta_version)
 
         QShortcut(QKeySequence("Ctrl+K"), self, activated=self.enfocar_busqueda)
 
@@ -364,7 +368,7 @@ class VentanaPrincipal(QMainWindow):
         dialogo.exec()
         self.ficha_abierta = None
         if dialogo.cambio and getattr(self, "pantalla_clientes", None):
-            self.pantalla_clientes.actualizar()
+            self.pantalla_clientes.recargar()
         if dialogo.cambio and getattr(self, "pantalla_pagos", None):
             self.pantalla_pagos.actualizar()
         if dialogo.cambio and getattr(self, "pantalla_casilleros", None):

@@ -11,11 +11,12 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from gimnasio.rutas import carpeta_ayuda
 from gimnasio.servicios.errores import ErrorValidacion
 from gimnasio.servicios.permisos import Permiso, UsuarioActual, exigir
 from gimnasio.texto import normalizar
 
-CARPETA_AYUDA = Path(__file__).resolve().parent.parent / "ayuda"
+CARPETA_AYUDA = carpeta_ayuda()
 TEMA_INICIO = "inicio"
 ESQUEMA_ENLACE = "tema"  # los enlaces entre temas se escriben [Texto](tema:clave)
 

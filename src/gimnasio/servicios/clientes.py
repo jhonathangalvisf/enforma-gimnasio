@@ -19,14 +19,14 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 
-from sqlalchemy import ColumnElement, and_, exists, func, or_, select, union
+from sqlalchemy import ColumnElement, and_, case, exists, func, or_, select, union
 from sqlalchemy.orm import Session, sessionmaker
 
 from gimnasio import config as cfg
 from gimnasio.formato import fecha as formato_fecha
 from gimnasio.modelos import (
-    Alerta, Asistencia, Casillero, CasilleroAsignacion, Cliente, Contacto, Membresia, Pago,
-    Plan, Usuario, ahora_utc,
+    Alerta, Asistencia, Casillero, CasilleroAsignacion, Cliente, Config, Contacto, Membresia,
+    Pago, Plan, Usuario, ahora_utc,
 )
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
@@ -52,6 +52,17 @@ CAMPOS_CONTACTO = frozenset({"direccion", "telefonos", "correos", "emergencias"}
 EXTENSIONES_FOTO = {".png", ".jpg", ".jpeg"}
 TAMANO_MAXIMO_FOTO = 5 * 1024 * 1024
 CODIGO_MAXIMO = 999_999
+CLAVE_CONSECUTIVO = "codigo_siguiente"  # parámetro de configuración
+
+
+def normalizar_codigo(codigo: str) -> str:
+    """'5000' -> '005000'. Lanza ErrorValidacion si no es un número de 1 a 6 dígitos."""
+    codigo = (codigo or "").strip()
+    if not codigo.isdigit() or len(codigo) > 6 or int(codigo) == 0:
+        raise ErrorValidacion("El código debe ser un número de 1 a 6 dígitos (000001 a 999999).")
+    return codigo.zfill(6)
+
+
 # Con menos dígitos solo se busca el código exacto (evita listar miles de teléfonos).
 MINIMO_DIGITOS_PREFIJO = 3
 
@@ -90,6 +101,21 @@ def calcular_vigencia(
     if dias <= dias_por_vencer:
         return Vigencia.POR_VENCER, dias
     return Vigencia.VIGENTE, dias
+
+
+class ErrorDocumentoRegistrado(ErrorValidacion):
+    """Se intentó inscribir a una persona que ya existe (mismo documento).
+
+    Un cliente tiene un solo código: en vez de crear otro, se reactiva el antiguo.
+    """
+
+    def __init__(self, cliente_id: int, codigo: str, nombre: str, activo: bool):
+        self.cliente_id, self.codigo, self.nombre, self.activo = cliente_id, codigo, nombre, activo
+        estado = "" if activo else " (inactivo)"
+        super().__init__(
+            f"Esta persona ya está registrada: {nombre}, código {codigo}{estado}. "
+            "Un cliente conserva siempre su mismo código."
+        )
 
 
 class ErrorCasilleroAsignado(ErrorValidacion):
@@ -143,6 +169,19 @@ class FiltrosClientes:
     registro_hasta: date | None = None
     cumple_mes: int | None = None  # 1..12
     sin_asistir_dias: int | None = None
+    al_dia: bool = False  # vigentes y por vencer (membresía que cubre hoy)
+
+
+@dataclass(frozen=True)
+class ResumenClientes:
+    """Conteo para el encabezado de Clientes. Las vigencias cuentan solo clientes activos."""
+
+    al_dia: int  # vigentes + por vencer
+    por_vencer: int
+    vencidos: int
+    sin_membresia: int
+    inactivos: int
+    total: int
 
 
 @dataclass(frozen=True)
@@ -425,15 +464,38 @@ class ServicioClientes:
         return self._reloj().astimezone(cfg.ZONA_HORARIA).date()
 
     # --- registro y modificación ---------------------------------------------------
-    def registrar(self, actual: UsuarioActual, datos: DatosCliente) -> FichaCliente:
+    def registrar(
+        self, actual: UsuarioActual, datos: DatosCliente, codigo: str | None = None
+    ) -> FichaCliente:
+        """Inscribe al cliente con el código consecutivo sugerido o, solo el admin, con
+        un código elegido a mano (que no mueve el consecutivo).
+
+        Si el documento ya existe lanza ErrorDocumentoRegistrado: la persona conserva
+        su código antiguo y se reactiva en lugar de crear otro.
+        """
         exigir(actual, Permiso.REGISTRAR_CLIENTES)
         datos = _validar(datos, self.hoy())
         ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
-            self._exigir_documento_libre(sesion, datos.documento)
+            self._exigir_documento_nuevo(sesion, datos.documento)
+            sugerido = self._codigo_sugerido(sesion)
+            elegido = normalizar_codigo(codigo) if codigo and codigo.strip() else sugerido
+            manual = elegido != sugerido
+            if manual:
+                if not actual.puede(Permiso.MODIFICAR_CLIENTE_COMPLETO):
+                    raise ErrorPermiso(
+                        "Solo el administrador puede asignar un código distinto al sugerido."
+                    )
+                self._exigir_codigo_libre(sesion, elegido)
+                # Fija el consecutivo actual para que el código manual no lo arrastre
+                # (sin valor guardado se seguiría después del código más alto).
+                if sesion.get(Config, CLAVE_CONSECUTIVO) is None:
+                    sesion.merge(Config(clave=CLAVE_CONSECUTIVO, valor=str(int(sugerido))))
+            else:
+                sesion.merge(Config(clave=CLAVE_CONSECUTIVO, valor=str(int(elegido) + 1)))
             cliente = Cliente(
-                codigo=self._siguiente_codigo(sesion),
+                codigo=elegido,
                 qr_token=secrets.token_urlsafe(16),
                 tipo_documento=datos.tipo_documento, documento=datos.documento,
                 nombres=datos.nombres, apellidos=datos.apellidos, sexo=datos.sexo,
@@ -449,11 +511,130 @@ class ServicioClientes:
             # Solo el código y quién lo registró: sin copiar datos personales.
             auditoria.registrar(
                 sesion, "cliente_registrado", "clientes", usuario_id=actual.id,
-                entidad_id=cliente.id, detalle={"codigo": cliente.codigo}, momento=ahora,
+                entidad_id=cliente.id,
+                detalle={"codigo": cliente.codigo, **({"codigo_manual": True} if manual else {})},
+                momento=ahora,
             )
             sesion.commit()
             cliente_id = cliente.id
         return self.obtener_ficha(actual, cliente_id)
+
+    def codigo_sugerido(self, actual: UsuarioActual) -> str:
+        """Siguiente código consecutivo libre (salta los que se dieron a mano)."""
+        exigir(actual, Permiso.REGISTRAR_CLIENTES)
+        with self._fabrica() as sesion:
+            return self._codigo_sugerido(sesion)
+
+    def cambiar_codigo(self, actual: UsuarioActual, cliente_id: int, nuevo: str) -> str:
+        """Solo admin. El historial (pagos, asistencias, casilleros) sigue unido al cliente;
+        el código anterior deja de funcionar en Recepción. No mueve el consecutivo."""
+        exigir(actual, Permiso.MODIFICAR_CLIENTE_COMPLETO)
+        nuevo = normalizar_codigo(nuevo)
+        with self._fabrica() as sesion:
+            usuario_vigente(sesion, actual)
+            cliente = self._obtener(sesion, cliente_id)
+            anterior = cliente.codigo
+            if nuevo == anterior:
+                return anterior
+            self._exigir_codigo_libre(sesion, nuevo)
+            cliente.codigo = nuevo
+            cliente.actualizado_en = self._reloj()
+            auditoria.registrar(
+                sesion, "cliente_codigo_cambiado", "clientes", usuario_id=actual.id,
+                entidad_id=cliente.id, detalle={"codigo": {"antes": anterior, "despues": nuevo}},
+            )
+            sesion.commit()
+            return nuevo
+
+    def cambiar_vigencia(
+        self, actual: UsuarioActual, cliente_id: int, nueva_fecha_fin: date, motivo: str,
+        plan_id: int | None = None,
+    ) -> date:
+        """Solo admin: fija a mano hasta qué día está al día el cliente.
+
+        Ajusta la fecha de fin de su última membresía no anulada. Si no tiene ninguna,
+        crea una de cortesía (precio 0) con el plan indicado, desde hoy. Queda en la
+        auditoría con la fecha anterior, la nueva y el motivo.
+        """
+        exigir(actual, Permiso.MODIFICAR_CLIENTE_COMPLETO)
+        motivo = _texto(motivo)
+        if len(motivo) < 3:
+            raise ErrorValidacion("Escriba el motivo del cambio de vigencia.")
+        if len(motivo) > 150:
+            raise ErrorValidacion("El motivo admite máximo 150 caracteres.")
+        hoy = self.hoy()
+        with self._fabrica() as sesion:
+            usuario_vigente(sesion, actual)
+            cliente = self._obtener(sesion, cliente_id)
+            ultima = sesion.scalars(
+                select(Membresia)
+                .where(Membresia.cliente_id == cliente.id, Membresia.estado == "activa")
+                .order_by(Membresia.fecha_fin.desc(), Membresia.id.desc()).limit(1)
+            ).first()
+            if ultima is not None:
+                if nueva_fecha_fin < ultima.fecha_inicio:
+                    raise ErrorValidacion(
+                        f"La última membresía inicia el {formato_fecha(ultima.fecha_inicio)}: "
+                        "la nueva fecha no puede ser anterior. Si quiere quitarla, anúlela "
+                        "desde Pagos."
+                    )
+                anterior = ultima.fecha_fin
+                if anterior == nueva_fecha_fin:
+                    return anterior
+                ultima.fecha_fin = nueva_fecha_fin
+                membresia_id = ultima.id
+            else:
+                if plan_id is None:
+                    raise ErrorValidacion(
+                        "El cliente no tiene membresías: elija el plan para asignarle vigencia."
+                    )
+                plan = sesion.get(Plan, plan_id)
+                if plan is None:
+                    raise ErrorValidacion("El plan no existe.")
+                anterior = None
+                inicio = min(hoy, nueva_fecha_fin)
+                nueva = Membresia(
+                    cliente_id=cliente.id, plan_id=plan.id, fecha_inicio=inicio,
+                    fecha_fin=nueva_fecha_fin, precio_pactado=0, estado="activa",
+                    motivo_descuento=f"Vigencia asignada por el administrador: {motivo}"[:200],
+                    creado_por=actual.id, creado_en=self._reloj(),
+                )
+                sesion.add(nueva)
+                sesion.flush()
+                membresia_id = nueva.id
+            auditoria.registrar(
+                sesion, "cliente_vigencia_cambiada", "clientes", usuario_id=actual.id,
+                entidad_id=cliente.id, detalle={
+                    "codigo": cliente.codigo, "membresia": membresia_id,
+                    "vence": {"antes": formato_fecha(anterior) if anterior else "sin membresía",
+                              "despues": formato_fecha(nueva_fecha_fin)},
+                    "motivo": motivo,
+                },
+            )
+            sesion.commit()
+            return nueva_fecha_fin
+
+    def resumen(self, actual: UsuarioActual) -> ResumenClientes:
+        """Cuántos clientes están al día, por vencer, vencidos, sin membresía e inactivos."""
+        exigir(actual, Permiso.VER_CLIENTES)
+        hoy = self.hoy()
+        limite = hoy + timedelta(days=self._configuracion.obtener("dias_por_vencer"))
+        fin = _Expresiones().fin
+        activo = Cliente.estado == "activo"
+        conteo = select(
+            func.count(Cliente.id),
+            func.sum(case((~activo, 1), else_=0)),
+            func.sum(case((and_(activo, fin >= hoy), 1), else_=0)),
+            func.sum(case((and_(activo, fin >= hoy, fin <= limite), 1), else_=0)),
+            func.sum(case((and_(activo, fin < hoy), 1), else_=0)),
+            func.sum(case((and_(activo, fin.is_(None)), 1), else_=0)),
+        )
+        with self._fabrica() as sesion:
+            total, inactivos, al_dia, por_vencer, vencidos, sin = sesion.execute(conteo).one()
+        return ResumenClientes(
+            al_dia=al_dia or 0, por_vencer=por_vencer or 0, vencidos=vencidos or 0,
+            sin_membresia=sin or 0, inactivos=inactivos or 0, total=total or 0,
+        )
 
     def modificar(
         self, actual: UsuarioActual, cliente_id: int, datos: DatosCliente
@@ -867,6 +1048,8 @@ class ServicioClientes:
                 Vigencia.POR_VENCER: and_(expr.fin >= hoy, expr.fin <= limite),
                 Vigencia.VIGENTE: expr.fin > limite,
             }[Vigencia(filtros.vigencia)])
+        if filtros.al_dia:
+            condiciones.append(expr.fin >= hoy)
         if filtros.plan_id:
             condiciones.append(expr.plan_id == filtros.plan_id)
         if filtros.registro_desde:
@@ -891,12 +1074,52 @@ class ServicioClientes:
         return condiciones
 
     @staticmethod
-    def _siguiente_codigo(sesion: Session) -> str:
-        ultimo = sesion.scalar(select(func.max(Cliente.codigo)))
-        siguiente = int(ultimo) + 1 if ultimo else 1
+    def _codigo_sugerido(sesion: Session) -> str:
+        """El consecutivo guardado en la configuración, saltando los códigos ya usados.
+
+        Sin consecutivo guardado (0) se continúa después del código más alto.
+        """
+        guardado = sesion.get(Config, CLAVE_CONSECUTIVO)
+        try:
+            siguiente = int(guardado.valor) if guardado and guardado.valor else 0
+        except ValueError:
+            siguiente = 0
+        if siguiente <= 0:
+            ultimo = sesion.scalar(select(func.max(Cliente.codigo)))
+            siguiente = int(ultimo) + 1 if ultimo else 1
+        usados = sesion.scalars(
+            select(Cliente.codigo).where(Cliente.codigo >= f"{siguiente:06d}")
+            .order_by(Cliente.codigo)
+        )
+        for usado in usados:  # se detiene en el primer hueco
+            if int(usado) != siguiente:
+                break
+            siguiente += 1
         if siguiente > CODIGO_MAXIMO:
-            raise ErrorValidacion("Se agotaron los códigos de cliente de 6 dígitos.")
+            raise ErrorValidacion(
+                "No quedan códigos consecutivos de 6 dígitos libres. Ajuste el "
+                "«Siguiente código de cliente» en Configuración."
+            )
         return f"{siguiente:06d}"
+
+    @staticmethod
+    def _exigir_codigo_libre(sesion: Session, codigo: str) -> None:
+        dueno = sesion.execute(
+            select(Cliente.nombres, Cliente.apellidos).where(Cliente.codigo == codigo)
+        ).first()
+        if dueno:
+            raise ErrorValidacion(
+                f"El código {codigo} ya es de {dueno.nombres} {dueno.apellidos}. Elija otro."
+            )
+
+    @staticmethod
+    def _exigir_documento_nuevo(sesion: Session, documento: str) -> None:
+        existente = sesion.scalars(select(Cliente).where(Cliente.documento == documento)).first()
+        if existente:
+            raise ErrorDocumentoRegistrado(
+                existente.id, existente.codigo, f"{existente.nombres} {existente.apellidos}",
+                existente.estado == "activo",
+            )
 
     @staticmethod
     def _exigir_documento_libre(

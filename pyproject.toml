@@ -4,15 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gimnasio"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Sistema de gestión del gimnasio Enforma (escritorio, Windows)"
 requires-python = ">=3.12"
+
+[tool.setuptools.dynamic]
+version = {attr = "gimnasio.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-gimnasio = ["recursos/*.wav", "ayuda/*.md"]
+gimnasio = ["recursos/*.wav", "recursos/*.ico", "recursos/*.png", "ayuda/*.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]

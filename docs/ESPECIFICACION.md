@@ -116,9 +116,9 @@ Asistencia (3.5), casilleros (3.6), invitados (3.7) y además:
 
 ## 4. Reglas de negocio
 
-- RN-01 **Código de cliente:** numérico, secuencial, único, inmutable, de 6 dígitos con ceros a la izquierda. Aparte se genera un `qr_token` aleatorio (`secrets.token_urlsafe`). Recepción acepta cualquiera de los dos.
+- RN-01 **Código de cliente:** numérico, único, de 6 dígitos con ceros a la izquierda. Se sugiere el consecutivo (parámetro `codigo_siguiente`, que salta los códigos ya usados); solo el administrador puede asignar un código manual (no mueve el consecutivo) o cambiar el código de un cliente (auditado). Un cliente tiene un solo código: si se inscribe un documento ya registrado se recupera su código antiguo (y se reactiva si estaba inactivo). Aparte se genera un `qr_token` aleatorio (`secrets.token_urlsafe`). Recepción acepta cualquiera de los dos.
 - RN-02 **Dos estados independientes:** el *estado administrativo* (activo/inactivo, lo cambia el admin) y la *vigencia* (calculada a partir de la última membresía no anulada: vigente, por vencer, vencida, sin membresía). Nunca se guarda la vigencia, siempre se calcula.
-- RN-03 **Fechas de membresía:** `fecha_fin = fecha_inicio + duracion_dias - 1` (inclusive). Puede ingresar hasta el día de `fecha_fin` incluido.
+- RN-03 **Fechas de membresía:** `fecha_fin = fecha_inicio + duracion_dias - 1` (inclusive). Puede ingresar hasta el día de `fecha_fin` incluido. Excepción: el administrador puede ajustar a mano la fecha fin con "Cambiar vigencia" (con motivo y auditado).
 - RN-04 **Renovación anticipada:** si el cliente aún está vigente, la nueva membresía inicia el día siguiente a la `fecha_fin` actual (configurable). Si ya está vencido, inicia hoy o en la fecha que se elija.
 - RN-05 **Cliente inactivo** no puede ingresar, aunque tenga membresía vigente.
 - RN-06 **Casilleros:** un cliente ↔ un casillero activo, reforzado por índices únicos parciales (ver 5).

@@ -59,4 +59,7 @@ docs/
 - Verificar la última copia de seguridad: `python scripts/verificar_backup.py` (o `--archivo ruta.enfbak`)
 - Medir copias de seguridad: `python scripts/medir_backup.py --db datos_prueba.db`
 - Nueva migración: `alembic revision --autogenerate -m "descripcion"` y revisar el archivo generado
+- Diagnóstico de la instalación: `python scripts/diagnostico.py` (empaquetado: `Enforma.exe --diagnostico`; prueba del .exe: `Enforma.exe --prueba-humo --reporte salida.txt`)
+- Ejecutable e instalador en Windows: `construir.bat` (PyInstaller con `empaquetado/enforma.spec` + Inno Setup con `empaquetado/enforma.iss`); en GitHub lo hace el workflow `.github/workflows/windows.yml`
+- Manual en PDF: `python empaquetado/manual_pdf.py`
 - Regenerar requirements.txt: `uv pip compile requirements.in --python-platform windows --python-version 3.12 -o requirements.txt`
