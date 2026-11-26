@@ -7,8 +7,8 @@
 - Asistencia, casilleros e invitados: reutilizan los reportes de sus módulos.
 
 Permisos (decisión del dueño, Fase 7): Recepción ve la asistencia de hoy, los
-casilleros, las visitas de invitados de hoy, su propio cierre de caja del día y los
-clientes por vencer. Todo lo demás, en especial los ingresos, solo el administrador.
+casilleros, las visitas de invitados de hoy y los clientes por vencer. Su cierre de
+caja lo ve en el módulo Pagos, con la clave de un administrador (se quitó de aquí). Todo lo demás, en especial los ingresos, solo el administrador.
 La verificación se hace aquí y en los servicios de cada módulo, no en la pantalla.
 
 Todos se exportan a Excel y PDF (queda en la auditoría) y se imprimen desde el PDF.
@@ -121,9 +121,8 @@ CATALOGO: tuple[DefinicionReporte, ...] = (
         "Pagos del periodo que se anularon, con quién y por qué.", ("rango", "usuario")),
     DefinicionReporte(
         "cierre_caja", "Ingresos", "Cierre de caja",
-        "Pagos de un día con totales por método y por usuario.", ("dia", "usuario"),
-        recepcion=True, nota_recepcion="Recepción ve solo su propio cierre de hoy.",
-        solo_hoy_recepcion=True),
+        "Pagos de un día con totales por método y por usuario.", ("dia", "usuario")),
+    # Recepción ve su cierre en el módulo Pagos, con la clave de un administrador.
     # Asistencia
     DefinicionReporte(
         "asistencia_dia", "Asistencia", "Asistencia del día",

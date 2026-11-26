@@ -21,3 +21,6 @@ gimnasio = ["recursos/*.wav", "recursos/*.ico", "recursos/*.png", "ayuda/*.md"]
 pythonpath = ["src", "."]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "clave_admin_real: la prueba usa la clave de administrador de verdad (sin simularla)",
+]

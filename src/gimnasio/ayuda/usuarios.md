@@ -8,7 +8,7 @@ Lo recomendado es **un usuario por persona**, para que en los recibos, la caja y
 
 | Rol | Qué puede hacer |
 |---|---|
-| **Recepción** | Registrar ingresos, clientes, membresías, pagos y abonos, casilleros, invitados y alertas. Modificar solo los datos de contacto de los clientes. Ver su caja de hoy y los reportes del día. Eliminar asistencias y visitas solo de hoy. |
+| **Recepción** | Registrar ingresos, casilleros (sin cobro), invitados y alertas. **Con la clave de un administrador, cada vez:** inscribir clientes, registrar membresías, pagos y abonos, y abrir el módulo Pagos (su caja de hoy). Modificar solo los datos de contacto de los clientes. Ver los reportes del día. Eliminar asistencias y visitas solo de hoy. |
 | **Administrador** | Todo lo anterior y además: anular pagos y membresías, aplicar descuentos, activar e inactivar clientes, modificar todos los datos, ver todos los reportes y la caja de cualquier día, crear casilleros, y entrar a Configuración (parámetros, planes, usuarios y auditoría). |
 
 ## Crear un usuario

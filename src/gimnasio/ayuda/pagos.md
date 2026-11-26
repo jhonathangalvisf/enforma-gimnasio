@@ -4,6 +4,18 @@ Este tema explica cómo se venden y renuevan las membresías, cómo se registran
 
 **Las membresías y los pagos se registran desde la ficha del cliente.** Búsquela con **Ctrl+K**. El módulo **Pagos** del menú muestra la caja del día.
 
+## Clave de administrador (Recepción)
+
+Recepción solo puede cobrar con la **clave de un administrador**, y se pide **cada vez**:
+
+- Al **registrar cualquier pago**: mensualidad, abono, casillero u otro (desde la ficha, con **F2** en Recepción o desde Pagos).
+- Al **inscribir un cliente nuevo**. La misma clave sirve para cobrar la mensualidad de esa inscripción (y el casillero, si lo pidió): no se pide dos veces.
+- Al **abrir el módulo Pagos**. Mientras la pantalla esté abierta se puede ver la caja y consultar; al salir del módulo se vuelve a bloquear.
+
+Aparece una ventana donde el administrador escribe su **usuario y contraseña**. Si se equivoca, cuenta para el bloqueo igual que al iniciar sesión. Si el cobro falla por otro motivo (por ejemplo falta la referencia), al corregirlo no se vuelve a pedir la clave. Cada cobro queda en la auditoría con el administrador que lo autorizó.
+
+Si quien trabaja es administrador, no se le pide nada.
+
 ## Membresía y plan
 
 - Un **plan** es lo que se vende: por ejemplo Mensual (30 días), Quincenal (15), Trimestral (90) o Día (1). El administrador los crea y les pone precio en [Configuración](tema:configuracion) → Planes.
@@ -72,10 +84,10 @@ Si se anula un pago de casillero, la fecha del casillero no cambia sola: el admi
 
 Muestra los pagos de un día con totales por **método** (efectivo, tarjeta, transferencia), el **total del día**, los **anulados** (se ven pero no suman), la tabla **por usuario** y la lista de **pagos del día**.
 
-- **Recepción** ve solo **su propia caja de hoy**.
+- **Recepción** ve solo **su propia caja de hoy**, después de que un administrador escriba su clave.
 - **El administrador** elige cualquier **día** y cualquier **usuario** (o todos), y pulsa **Actualizar**.
 
-Al final del turno, compare el efectivo que hay en la caja con el total de "Efectivo" de su cierre. El cierre también está en [Reportes](tema:reportes), con exportación a Excel y PDF.
+Al final del turno, compare el efectivo que hay en la caja con el total de "Efectivo" de su cierre. El administrador también tiene el cierre en [Reportes](tema:reportes), con exportación a Excel y PDF.
 
 ## Preguntas frecuentes
 

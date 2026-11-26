@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QLocale, Qt, QUrl
+from PySide6.QtCore import QDate, QLocale, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDateEdit, QGroupBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
@@ -23,6 +24,12 @@ from gimnasio.servicios.pagos import (
     calcular_fecha_fin,
 )
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
+from gimnasio.servicios.autorizaciones import (
+    PARA_MODULO_PAGOS, PARA_PAGO, Autorizacion, necesita_autorizacion,
+)
+from gimnasio.ui.autorizacion import (
+    asegurar_autorizacion, olvidar_autorizacion_si_falla, pedir_autorizacion,
+)
 from gimnasio.ui.comunes import boton, celda, etiqueta, mostrar_error, tabla
 from gimnasio.ui.dialogos import _DialogoBase
 
@@ -169,10 +176,13 @@ class DialogoMembresia(_DialogoBase):
 
     def __init__(self, servicios: Servicios, actual: UsuarioActual, cliente_id: int,
                  nombre_cliente: str = "", padre: QWidget | None = None,
-                 con_casillero: bool = False, titulo: str = "Renovar membresía"):
+                 con_casillero: bool = False, titulo: str = "Renovar membresía",
+                 autorizacion: Autorizacion | None = None):
         super().__init__(titulo, nombre_cliente, padre)
         self.setMinimumWidth(640)
         self._servicios, self._actual, self._cliente_id = servicios, actual, cliente_id
+        # Recepción cobra con la clave de un administrador (la de la inscripción, si viene).
+        self._autorizacion = autorizacion
         self.resultado: MembresiaRegistrada | None = None
         self.resultado_casillero = None
         self.ruta_recibo: Path | None = None
@@ -270,16 +280,19 @@ class DialogoMembresia(_DialogoBase):
             return
         sin_pago = self.sin_pago.isChecked() or self.campo_precio.value() == 0
         con_casillero = self.casillero is not None and self.casillero.isChecked()
+        if con_casillero and sin_pago:
+            self.mostrar_error(
+                "Para cobrar el casillero en el mismo recibo registre también el pago "
+                "de la mensualidad (o quite el casillero y cóbrelo aparte).")
+            return
+        if not asegurar_autorizacion(self, PARA_PAGO):
+            return
         comunes = dict(fecha_inicio=leer_fecha(self.campo_inicio),
                        precio_pactado=self.campo_precio.value(),
-                       motivo_descuento=self.campo_motivo.text())
+                       motivo_descuento=self.campo_motivo.text(),
+                       autorizacion=self._autorizacion)
         try:
             if con_casillero:
-                if sin_pago:
-                    self.mostrar_error(
-                        "Para cobrar el casillero en el mismo recibo registre también el pago "
-                        "de la mensualidad (o quite el casillero y cóbrelo aparte).")
-                    return
                 r = self._servicios.casilleros.mensualidad_con_casillero(
                     self._actual, self._cliente_id, plan.id, pago=self.pago.datos(),
                     casillero=self.casillero.datos(), **comunes)
@@ -289,6 +302,7 @@ class DialogoMembresia(_DialogoBase):
                     self._actual, self._cliente_id, plan.id,
                     pago=None if sin_pago else self.pago.datos(), **comunes)
         except ErrorNegocio as e:
+            olvidar_autorizacion_si_falla(self, e)
             self.mostrar_error(str(e))
             return
         if self.resultado.pago and self.abrir_recibo.isChecked():
@@ -307,6 +321,7 @@ class DialogoPago(_DialogoBase):
         self.setMinimumWidth(600)
         self._servicios, self._actual, self._cliente_id = servicios, actual, cliente_id
         self._membresia = membresia
+        self._autorizacion: Autorizacion | None = None
         self.resultado: PagoRegistrado | None = None
         self.ruta_recibo: Path | None = None
         self.abrir: Callable[[Path], None] = abrir_archivo
@@ -335,13 +350,17 @@ class DialogoPago(_DialogoBase):
         self.boton_guardar.clicked.connect(self.guardar)
 
     def guardar(self) -> None:
+        if not asegurar_autorizacion(self, PARA_PAGO):
+            return
         try:
             self.resultado = self._servicios.pagos.registrar_pago(
                 self._actual, self._cliente_id, self.pago.datos(),
                 concepto=self.campo_concepto.currentData(),
                 membresia_id=self._membresia.id if self._membresia else None,
+                autorizacion=self._autorizacion,
             )
         except ErrorNegocio as e:
+            olvidar_autorizacion_si_falla(self, e)
             self.mostrar_error(str(e))
             return
         if self.abrir_recibo.isChecked():
@@ -353,7 +372,10 @@ class DialogoPago(_DialogoBase):
 # --- Cierre de caja -----------------------------------------------------------------
 
 class PantallaPagos(QWidget):
-    """Cierre de caja diario por usuario y método. Recepción ve el suyo de hoy."""
+    """Cierre de caja diario por usuario y método. Recepción ve el suyo de hoy.
+
+    Para Recepción el módulo está bloqueado: cada vez que entra, un administrador debe
+    escribir su clave. Al salir de la pantalla se vuelve a bloquear."""
 
     COLUMNAS = ["Recibo", "Hora", "Cliente", "Concepto", "Método", "Referencia", "Monto",
                 "Usuario", "Estado"]
@@ -373,6 +395,21 @@ class PantallaPagos(QWidget):
             "caja del día y se consultan los pagos; los anulados no suman.", "textoSuave"))
         self.pestanas = QTabWidget()
         principal.addWidget(self.pestanas, 1)
+        self.autorizacion: Autorizacion | None = None
+        self.desbloqueado = not necesita_autorizacion(actual)
+        self.panel_bloqueado = QWidget()
+        bloqueo = QVBoxLayout(self.panel_bloqueado)
+        bloqueo.addStretch()
+        bloqueo.addWidget(etiqueta(
+            "🔒 El módulo de Pagos necesita la clave de un administrador cada vez que se abre.",
+            "textoSuave"), 0, Qt.AlignmentFlag.AlignCenter)
+        self.boton_desbloquear = boton("Desbloquear con clave de administrador…", principal=True)
+        self.boton_desbloquear.clicked.connect(self.desbloquear)
+        bloqueo.addWidget(self.boton_desbloquear, 0, Qt.AlignmentFlag.AlignCenter)
+        bloqueo.addStretch()
+        principal.addWidget(self.panel_bloqueado, 1)
+        self.pestanas.setVisible(self.desbloqueado)
+        self.panel_bloqueado.setVisible(not self.desbloqueado)
         cierre = QWidget()
         capa = QVBoxLayout(cierre)
         self.pestanas.addTab(cierre, "Cierre de caja")
@@ -447,7 +484,9 @@ class PantallaPagos(QWidget):
 
         from gimnasio.ui.pagos_consulta import PestanaConsultaPagos, PestanaDepuracion
 
-        self.consulta = PestanaConsultaPagos(servicios, actual)
+        pantalla = weakref.ref(self)  # sin ciclo de referencias con la pestaña
+        self.consulta = PestanaConsultaPagos(
+            servicios, actual, lambda: pantalla().autorizacion if pantalla() else None)
         self.pestanas.addTab(self.consulta, "Consultar pagos")
         self.depuracion = None
         if actual.puede(Permiso.DEPURAR_PAGOS):
@@ -456,12 +495,49 @@ class PantallaPagos(QWidget):
 
     def showEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
         super().showEvent(evento)
+        if self.desbloqueado:
+            self.actualizar()
+        else:
+            # Primero se ve la pantalla bloqueada y enseguida se pide la clave.
+            QTimer.singleShot(0, self.desbloquear)
+
+    def hideEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
+        super().hideEvent(evento)
+        self.bloquear()
+
+    def desbloquear(self) -> bool:
+        if self.desbloqueado:
+            return True
+        ok, autorizacion = pedir_autorizacion(self, self._servicios, self._actual,
+                                              PARA_MODULO_PAGOS)
+        if not ok:
+            return False
+        self.autorizacion = autorizacion
+        self.desbloqueado = True
+        self.panel_bloqueado.hide()
+        self.pestanas.show()
         self.actualizar()
+        return True
+
+    def bloquear(self) -> None:
+        """Recepción: al salir del módulo se olvida la autorización."""
+        if not necesita_autorizacion(self._actual):
+            return
+        self._servicios.autorizaciones.revocar(self.autorizacion)
+        self.autorizacion = None
+        self.desbloqueado = False
+        self.pestanas.hide()
+        self.panel_bloqueado.show()
+        self.tabla.setRowCount(0)
+        self.tabla_usuarios.setRowCount(0)
 
     def actualizar(self) -> None:
+        if not self.desbloqueado:
+            return
         try:
             self.cierre = self._servicios.pagos.cierre_caja(
-                self._actual, leer_fecha(self.campo_dia), self.campo_usuario.currentData())
+                self._actual, leer_fecha(self.campo_dia), self.campo_usuario.currentData(),
+                autorizacion=self.autorizacion)
         except ErrorNegocio as e:
             mostrar_error(self, e)
             return

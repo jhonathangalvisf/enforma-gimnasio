@@ -38,6 +38,8 @@ ACCIONES = {
     "cliente_activado": "Cliente activado",
     "cliente_codigo_cambiado": "Código de cliente cambiado",
     "cliente_vigencia_cambiada": "Vigencia de cliente cambiada a mano",
+    "autorizacion_admin": "Autorización de administrador (clave)",
+    "operacion_autorizada": "Operación de Recepción autorizada por un administrador",
     "casillero_creado": "Casillero creado",
     "casilleros_creados": "Casilleros creados en lote",
     "casillero_editado": "Casillero editado",

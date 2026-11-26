@@ -135,7 +135,7 @@ def test_pagar_casillero_desde_pagos(qapp, servicios, recepcion, admin, libres):
     c = servicios.clientes.registrar(admin, datos())
     p = PantallaPagos(servicios, recepcion, pedir=lambda *_: c.codigo)
     p.abrir = lambda _ruta: None
-    assert p.boton_casillero is not None
+    assert p.desbloquear() and p.boton_casillero is not None
 
     def asignar(dialogo):
         assert isinstance(dialogo, DialogoAsignarCasillero)

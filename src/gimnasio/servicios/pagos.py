@@ -35,6 +35,10 @@ from gimnasio.modelos import (
 )
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
+from gimnasio.servicios.autorizaciones import (
+    PARA_INSCRIPCION, PARA_MODULO_PAGOS, PARA_PAGO, Autorizacion, ServicioAutorizaciones,
+    registrar_uso,
+)
 from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.errores import ErrorPermiso, ErrorValidacion
 from gimnasio.servicios.permisos import Permiso, UsuarioActual, exigir
@@ -316,11 +320,14 @@ class ServicioPagos:
         configuracion: ServicioConfiguracion,
         carpeta_datos: Path | None = None,
         reloj: Reloj = ahora_utc,
+        *,
+        autorizaciones: ServicioAutorizaciones,
     ):
         self._fabrica = fabrica
         self._configuracion = configuracion
         self._carpeta = carpeta_datos
         self._reloj = reloj
+        self.autorizaciones = autorizaciones
 
     def hoy(self) -> date:
         return self._reloj().astimezone(cfg.ZONA_HORARIA).date()
@@ -364,18 +371,25 @@ class ServicioPagos:
         precio_pactado: int | None = None,
         motivo_descuento: str = "",
         pago: DatosPago | None = None,
+        autorizacion: Autorizacion | None = None,
     ) -> MembresiaRegistrada:
-        """Registra la membresía y, si se indica, su primer pago (completo o abono)."""
+        """Registra la membresía y, si se indica, su primer pago (completo o abono).
+        Recepción necesita la autorización de un administrador (pago o inscripción)."""
         exigir(actual, Permiso.REGISTRAR_PAGOS)
+        admin = self.autorizaciones.verificar(actual, autorizacion, PARA_PAGO, PARA_INSCRIPCION)
+        ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
             registrada = self.membresia_en_sesion(
                 sesion, actual, cliente_id, plan_id, fecha_inicio=fecha_inicio,
                 precio_pactado=precio_pactado, motivo_descuento=motivo_descuento, pago=pago,
-                ahora=self._reloj(),
+                ahora=ahora,
             )
+            registrar_uso(sesion, actual, admin, "membresía", ahora, membresia=registrada.id,
+                          recibo=registrada.pago.recibo if registrada.pago else None)
             sesion.commit()
-            return registrada
+        self.autorizaciones.gastar(autorizacion)
+        return registrada
 
     def membresia_en_sesion(
         self, sesion: Session, actual: UsuarioActual, cliente_id: int, plan_id: int, *,
@@ -531,9 +545,12 @@ class ServicioPagos:
         *,
         concepto: str = "membresia",
         membresia_id: int | None = None,
+        autorizacion: Autorizacion | None = None,
     ) -> PagoRegistrado:
-        """Pago suelto: abono a una membresía, casillero u otro concepto."""
+        """Pago suelto: abono a una membresía, casillero u otro concepto.
+        Recepción necesita la autorización de un administrador."""
         exigir(actual, Permiso.REGISTRAR_PAGOS)
+        admin = self.autorizaciones.verificar(actual, autorizacion, PARA_PAGO)
         datos = _validar_pago(datos)
         if concepto not in CONCEPTOS:
             raise ErrorValidacion("Concepto de pago no válido.")
@@ -565,8 +582,10 @@ class ServicioPagos:
             registrado = self._crear_pago(
                 sesion, actual, cliente, datos, concepto, membresia, pagado, ahora
             )
+            registrar_uso(sesion, actual, admin, "pago", ahora, recibo=registrado.recibo)
             sesion.commit()
-            return registrado
+        self.autorizaciones.gastar(autorizacion)
+        return registrado
 
     def anular_pago(self, actual: UsuarioActual, pago_id: int, motivo: str) -> None:
         """Solo admin. El pago sigue visible con su motivo y deja de sumar en la caja."""
@@ -599,10 +618,13 @@ class ServicioPagos:
 
     # --- cierre de caja --------------------------------------------------------------
     def cierre_caja(
-        self, actual: UsuarioActual, dia: date | None = None, usuario_id: int | None = None
+        self, actual: UsuarioActual, dia: date | None = None, usuario_id: int | None = None,
+        autorizacion: Autorizacion | None = None,
     ) -> CierreCaja:
-        """Pagos del día (de Bogotá). Recepción solo ve los suyos de hoy."""
+        """Pagos del día (de Bogotá). Recepción solo ve los suyos de hoy, con la
+        autorización de un administrador para el módulo de Pagos."""
         exigir(actual, Permiso.REGISTRAR_PAGOS)
+        self.autorizaciones.verificar(actual, autorizacion, PARA_MODULO_PAGOS)
         hoy = self.hoy()
         dia = dia or hoy
         if not actual.puede(Permiso.CIERRE_CAJA_GENERAL):
@@ -759,12 +781,14 @@ class ServicioPagos:
     # --- consultas -------------------------------------------------------------------
 
     def consultar_pagos(self, actual: UsuarioActual, filtros: FiltrosPagos,
-                        limite: int = LIMITE_CONSULTA) -> ConsultaPagos:
+                        limite: int = LIMITE_CONSULTA,
+                        autorizacion: Autorizacion | None = None) -> ConsultaPagos:
         """Pagos por cliente y/o por fecha de pago, del más reciente al más antiguo.
 
         El administrador consulta todo; Recepción solo los pagos de un cliente puntual.
         """
         exigir(actual, Permiso.REGISTRAR_PAGOS)
+        self.autorizaciones.verificar(actual, autorizacion, PARA_MODULO_PAGOS)
         if filtros.cliente_id is None and not actual.puede(Permiso.REPORTES_TODOS):
             raise ErrorPermiso("Recepción solo puede consultar los pagos de un cliente. Elija el cliente.")
         if filtros.desde and filtros.hasta and filtros.desde > filtros.hasta:
@@ -828,13 +852,15 @@ class ServicioPagos:
         )
 
     def exportar_consulta(self, actual: UsuarioActual, filtros: FiltrosPagos,
-                           ruta: Path | str, formato: str) -> Path:
+                           ruta: Path | str, formato: str,
+                           autorizacion: Autorizacion | None = None) -> Path:
         """Exporta la consulta a Excel ("xlsx") o PDF ("pdf"). Queda en la auditoría."""
         from gimnasio.reportes import exportar as exp
 
         if formato not in ("xlsx", "pdf"):
             raise ErrorValidacion("Formato de exportación no válido.")
-        consulta = self.consultar_pagos(actual, filtros, limite=10**9)
+        consulta = self.consultar_pagos(actual, filtros, limite=10**9,
+                                        autorizacion=autorizacion)
         partes = []
         if filtros.desde or filtros.hasta:
             partes.append("Pagos del " + (formato_fecha(filtros.desde) if filtros.desde else "inicio")

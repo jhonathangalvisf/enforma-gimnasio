@@ -86,7 +86,7 @@ def test_catalogo_completo_seccion_3_8():
 def test_recepcion_ve_solo_los_basicos(servicios, admin, recepcion):
     disponibles = {d.clave for d in servicios.reportes.disponibles(recepcion)}
     assert disponibles == {
-        "clientes_por_vencer", "cierre_caja", "asistencia_dia", "casilleros_lista",
+        "clientes_por_vencer", "asistencia_dia", "casilleros_lista",
         "casilleros_vencidos", "casilleros_liberar", "casilleros_dia", "invitados_visitas",
     }
     assert len(servicios.reportes.disponibles(admin)) == len(CATALOGO)
@@ -96,6 +96,8 @@ def test_recepcion_ve_solo_los_basicos(servicios, admin, recepcion):
     "ingresos_detalle", "ingresos_metodo", "ingresos_usuario", "ingresos_plan", "ingresos_dia",
     "pagos_anulados", "clientes_vencidos", "clientes_morosos", "clientes_mensual",
     "clientes_bajas", "asistencia_rango", "invitados_anfitriones",
+    # Recepción ve su cierre en el módulo Pagos, con la clave de un administrador.
+    "cierre_caja",
 ])
 def test_recepcion_no_puede_generar_reportes_de_admin(servicios, recepcion, clave):
     """El permiso se valida en el servicio, no solo ocultando el reporte en pantalla."""
@@ -109,17 +111,12 @@ def test_recepcion_limitada_al_dia_de_hoy(servicios, admin, recepcion, escenario
     rep = servicios.reportes
     ayer = HOY - timedelta(days=1)
     with pytest.raises(ErrorPermiso):
-        rep.generar(recepcion, "cierre_caja", P(desde=ayer))
-    with pytest.raises(ErrorPermiso):  # el cierre de otro usuario
-        rep.generar(recepcion, "cierre_caja", P(desde=HOY, usuario_id=admin.id))
-    with pytest.raises(ErrorPermiso):
         rep.generar(recepcion, "asistencia_dia", P(desde=ayer))
     with pytest.raises(ErrorPermiso):
         rep.generar(recepcion, "invitados_visitas", P(desde=ayer, hasta=HOY))
-    # Su propio cierre de hoy: solo sus pagos.
-    cierre = rep.generar(recepcion, "cierre_caja", P(desde=HOY))
-    assert _columna(cierre, "Registró") == ["rita"]
-    assert cierre.totales[cierre.encabezados.index("Monto")] == 50_000
+    # Su propio cierre de hoy: solo sus pagos (servicio de Pagos, ver test_pagos).
+    cierre = servicios.pagos.cierre_caja(recepcion)
+    assert [f.usuario for f in cierre.filas] == ["rita"] and cierre.total == 50_000
     assert rep.usuarios(recepcion) == [(recepcion.id, "rita")]
     with pytest.raises(ErrorPermiso):
         rep.generar(None, "clientes_por_vencer", P())

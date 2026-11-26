@@ -30,6 +30,9 @@ from gimnasio.modelos import (
 )
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
+from gimnasio.servicios.autorizaciones import (
+    PARA_INSCRIPCION, Autorizacion, ServicioAutorizaciones, registrar_uso,
+)
 from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.errores import ErrorPermiso, ErrorValidacion
 from gimnasio.servicios.pagos import saldos_por_membresia
@@ -454,26 +457,34 @@ class ServicioClientes:
         configuracion: ServicioConfiguracion,
         carpeta_datos: Path | None = None,
         reloj: Reloj = ahora_utc,
+        *,
+        autorizaciones: ServicioAutorizaciones,
     ):
         self._fabrica = fabrica
         self._configuracion = configuracion
         self._carpeta = carpeta_datos
         self._reloj = reloj
+        self._autorizaciones = autorizaciones
 
     def hoy(self) -> date:
         return self._reloj().astimezone(cfg.ZONA_HORARIA).date()
 
     # --- registro y modificación ---------------------------------------------------
     def registrar(
-        self, actual: UsuarioActual, datos: DatosCliente, codigo: str | None = None
+        self, actual: UsuarioActual, datos: DatosCliente, codigo: str | None = None,
+        autorizacion: Autorizacion | None = None,
     ) -> FichaCliente:
         """Inscribe al cliente con el código consecutivo sugerido o, solo el admin, con
         un código elegido a mano (que no mueve el consecutivo).
 
         Si el documento ya existe lanza ErrorDocumentoRegistrado: la persona conserva
         su código antiguo y se reactiva en lugar de crear otro.
+
+        Recepción necesita la autorización de un administrador ("inscripcion"), que
+        sirve también para el primer cobro.
         """
         exigir(actual, Permiso.REGISTRAR_CLIENTES)
+        admin = self._autorizaciones.verificar(actual, autorizacion, PARA_INSCRIPCION)
         datos = _validar(datos, self.hoy())
         ahora = self._reloj()
         with self._fabrica() as sesion:
@@ -515,8 +526,10 @@ class ServicioClientes:
                 detalle={"codigo": cliente.codigo, **({"codigo_manual": True} if manual else {})},
                 momento=ahora,
             )
+            registrar_uso(sesion, actual, admin, "inscripción", ahora, cliente=cliente.codigo)
             sesion.commit()
             cliente_id = cliente.id
+        self._autorizaciones.gastar(autorizacion)
         return self.obtener_ficha(actual, cliente_id)
 
     def codigo_sugerido(self, actual: UsuarioActual) -> str:

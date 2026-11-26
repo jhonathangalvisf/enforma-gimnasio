@@ -59,13 +59,11 @@ def test_recepcion_ve_solo_basicos_y_fechas_de_hoy(qapp, servicios, recepcion, d
     pantalla = PantallaReportes(servicios, recepcion)
     claves = _claves(pantalla)
     assert "ingresos_metodo" not in claves and "clientes_morosos" not in claves
-    assert "clientes_por_vencer" in claves and "cierre_caja" in claves
-    pantalla.elegir("cierre_caja")
+    # El cierre de caja de Recepción está en el módulo Pagos (con clave de administrador).
+    assert "clientes_por_vencer" in claves and "cierre_caja" not in claves
+    pantalla.elegir("asistencia_dia")
     assert not pantalla.dia.isEnabled()
-    assert pantalla.usuario.count() == 1  # solo ella misma
-    rep = pantalla.generar()
-    assert rep is not None and len(rep.filas) == 1
-    assert "$ 20.000" in pantalla.etiqueta_totales.text()
+    assert pantalla.generar() is not None
 
     pantalla.elegir("clientes_por_vencer")
     assert pantalla.dias.isVisibleTo(pantalla) and not pantalla.metodo.isVisibleTo(pantalla)
