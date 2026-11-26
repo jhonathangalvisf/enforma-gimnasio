@@ -48,6 +48,9 @@ QMainWindow, QDialog {{ background: {GRIS_FONDO}; }}
 #mensajeError {{ color: {ROJO}; font-weight: 600; }}
 #mensajeExito {{ color: {VERDE}; font-weight: 600; }}
 #tarjeta {{ background: white; border: 1px solid {GRIS_BORDE}; border-radius: 6px; }}
+#contadorInvitado {{ font-size: 30pt; font-weight: 700; color: {AZUL}; }}
+#contadorTexto {{ font-size: 12pt; font-weight: 600; color: {AZUL}; }}
+#avisoLimite {{ color: {ROJO}; font-weight: 600; }}
 
 QLineEdit, QSpinBox, QComboBox, QDateEdit {{
     background: white; border: 1px solid {GRIS_BORDE}; border-radius: 4px; padding: 5px 7px;

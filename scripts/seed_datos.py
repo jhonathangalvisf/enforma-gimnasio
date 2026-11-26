@@ -33,6 +33,7 @@ from gimnasio.config import ZONA_HORARIA, url_base_datos  # noqa: E402
 from gimnasio.db.engine import crear_motor  # noqa: E402
 from gimnasio.db.migraciones import actualizar_esquema  # noqa: E402
 from gimnasio.modelos.clientes import texto_busqueda  # noqa: E402
+from gimnasio.texto import normalizar  # noqa: E402
 from gimnasio.modelos import (  # noqa: E402
     Alerta,
     Asistencia,
@@ -331,8 +332,9 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
                 documentos.add(doc)
                 break
         primera = hoy - timedelta(days=rnd.randint(0, 365))
+        nombre = fk.name()
         invitados.append(dict(
-            id=j, nombre=fk.name(), documento=doc,
+            id=j, nombre=nombre, documento=doc, busqueda=normalizar(nombre),
             telefono=f"3{rnd.randint(0, 2)}{rnd.randint(0, 9)}{rnd.randint(1_000_000, 9_999_999)}",
             creado_en=a_utc(primera, 10, 0), creado_por=rnd.choice(ids_recepcion),
         ))

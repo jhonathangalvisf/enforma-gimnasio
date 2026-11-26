@@ -33,6 +33,8 @@ def test_seed_pequeno_es_coherente(tmp_path):
                    "OR (k.zona = 'mujeres' AND c.sexo <> 'F'))") == 0
         assert uno("SELECT count(*) FROM casillero_asignaciones "
                    "WHERE fecha_liberacion IS NULL AND fecha_vencimiento IS NULL") == 0
+        # Invitados con la columna de búsqueda llena (Fase 6).
+        assert uno("SELECT count(*) FROM invitados WHERE busqueda = ''") == 0
         # Códigos de 6 dígitos secuenciales.
         assert uno("SELECT min(codigo) FROM clientes") == "000001"
         # RN-03: fecha_fin = inicio + duración - 1
