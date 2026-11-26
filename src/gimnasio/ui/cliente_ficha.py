@@ -402,6 +402,14 @@ class DialogoFicha(QDialog):
         self.boton_foto = boton("Cambiar foto…")
         fila.addWidget(self.boton_modificar)
         fila.addWidget(self.boton_foto)
+        self.boton_vigencia = None
+        if self._actual.puede(Permiso.MODIFICAR_CLIENTE_COMPLETO):
+            self.boton_vigencia = boton("Cambiar vigencia…")
+            self.boton_vigencia.setToolTip(
+                "Solo el administrador: fija a mano hasta qué día está al día el cliente."
+            )
+            self.boton_vigencia.clicked.connect(self.cambiar_vigencia)
+            fila.addWidget(self.boton_vigencia)
         self.boton_estado = None
         if self._actual.puede(Permiso.ACTIVAR_CLIENTES):
             self.boton_estado = boton("Inactivar cliente…" if f.activo else "Activar cliente")
@@ -440,6 +448,11 @@ class DialogoFicha(QDialog):
 
     def cambiar_estado(self) -> None:
         if cambiar_estado(self, self._servicios, self._actual, self._cliente_id):
+            self.cambio = True
+            self.cargar()
+
+    def cambiar_vigencia(self) -> None:
+        if DialogoVigencia(self._servicios, self._actual, self.ficha, padre=self).exec():
             self.cambio = True
             self.cargar()
 
@@ -652,6 +665,61 @@ class DialogoAlerta(_DialogoBase):
                 fecha_fin=leer_fecha(self.fecha_hasta) if self.campo_hasta.isChecked() else None,
             )
         except ErrorNegocio as e:
+            self.mostrar_error(str(e))
+            return
+        self.accept()
+
+
+class DialogoVigencia(_DialogoBase):
+    """Solo admin: asigna a mano la fecha hasta la que el cliente está al día."""
+
+    def __init__(self, servicios: Servicios, actual: UsuarioActual, ficha: FichaCliente,
+                 padre: QWidget | None = None):
+        actual_texto = (f"Hoy vence el {fecha(ficha.fecha_fin)} ({ficha.plan_actual})."
+                        if ficha.fecha_fin else "El cliente no tiene membresías.")
+        super().__init__(
+            "Cambiar vigencia",
+            f"{ficha.nombre_completo} · código {ficha.codigo}. {actual_texto} "
+            "Se ajusta la fecha de fin de su última membresía y queda en la auditoría.",
+            padre,
+        )
+        self._servicios, self._actual, self._ficha = servicios, actual, ficha
+        self.campo_fecha = QLineEdit(fecha(ficha.fecha_fin) if ficha.fecha_fin else "")
+        self.campo_fecha.setPlaceholderText("dd/mm/aaaa")
+        self.campo_fecha.setMaximumWidth(140)
+        self.formulario.addRow("Al día hasta *", self.campo_fecha)
+        self.campo_plan = None
+        if not any(m.estado == "activa" for m in ficha.membresias):
+            self.campo_plan = QComboBox()
+            for plan_id, nombre in servicios.clientes.planes(actual):
+                self.campo_plan.addItem(nombre, plan_id)
+            self.formulario.addRow("Plan *", self.campo_plan)
+        self.campo_motivo = QLineEdit()
+        self.campo_motivo.setMaxLength(150)
+        self.campo_motivo.setPlaceholderText("Por ejemplo: cliente antiguo, compensación, error")
+        self.formulario.addRow("Motivo *", self.campo_motivo)
+        guardar = boton("Guardar", principal=True)
+        cancelar = boton("Cancelar")
+        self._botones.addWidget(cancelar)
+        self._botones.addWidget(guardar)
+        cancelar.clicked.connect(self.reject)
+        guardar.clicked.connect(self.guardar)
+        self.campo_motivo.returnPressed.connect(self.guardar)
+        self.campo_fecha.setFocus()
+        self.campo_fecha.selectAll()
+
+    def guardar(self) -> None:
+        from gimnasio.formato import leer_fecha
+
+        try:
+            nueva = leer_fecha(self.campo_fecha.text())
+            if nueva is None:
+                raise ErrorValidacion("Escriba la nueva fecha de vencimiento (dd/mm/aaaa).")
+            self._servicios.clientes.cambiar_vigencia(
+                self._actual, self._ficha.id, nueva, self.campo_motivo.text(),
+                plan_id=self.campo_plan.currentData() if self.campo_plan else None,
+            )
+        except (ErrorNegocio, ValueError) as e:
             self.mostrar_error(str(e))
             return
         self.accept()

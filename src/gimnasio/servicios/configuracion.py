@@ -88,6 +88,11 @@ PARAMETROS: tuple[Parametro, ...] = (
               grupo="Datos del gimnasio"),
     Parametro("gimnasio_telefono", "Teléfono", "texto", "", largo_maximo=40,
               grupo="Datos del gimnasio"),
+    Parametro("codigo_siguiente", "Siguiente código de cliente (consecutivo)", "entero", 0, 0,
+              999_999,
+              ayuda="Código que se sugiere al inscribir. Los códigos ya usados se saltan solos. "
+                    "0 = continuar después del código más alto.",
+              grupo="Clientes"),
     Parametro("recibo_prefijo", "Prefijo de recibos", "texto", "R-", largo_maximo=10,
               grupo="Recibos"),
     Parametro("recibo_siguiente", "Siguiente número de recibo", "entero", 1, 1, 999_999_999,
