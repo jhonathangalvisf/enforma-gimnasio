@@ -36,6 +36,14 @@ Son los ajustes del sistema. Cambie los valores y pulse **Guardar cambios**; **D
 | Intentos fallidos antes de bloquear | Contraseñas equivocadas seguidas antes de bloquear al usuario. | 5 |
 | Minutos de bloqueo | Cuánto dura el bloqueo. | 15 |
 
+### Copias de seguridad
+
+| Parámetro | Qué hace | Por defecto |
+|---|---|---|
+| Hora de la copia diaria | Hora del día (0 a 23) en que se hace la copia automática si el programa está abierto. Además siempre se hace al cerrar. | 21 (9:00 p. m.) |
+
+El disco externo, la contraseña y la restauración se manejan en [Copias de seguridad](tema:backups).
+
 ### Datos del gimnasio y recibos
 
 - **Nombre, NIT, dirección y teléfono:** salen en los recibos y en los reportes.

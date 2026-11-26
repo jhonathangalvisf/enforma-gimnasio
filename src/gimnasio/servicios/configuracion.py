@@ -33,6 +33,7 @@ class Parametro:
     largo_maximo: int = 200
     ayuda: str = ""
     grupo: str = "General"
+    oculto: bool = False  # se guarda como parámetro pero se edita en otra pantalla
 
 
 PARAMETROS: tuple[Parametro, ...] = (
@@ -73,6 +74,13 @@ PARAMETROS: tuple[Parametro, ...] = (
               cfg.INTENTOS_LOGIN_MAX, 3, 20, grupo="Seguridad"),
     Parametro("minutos_bloqueo", "Minutos de bloqueo", "entero", 15, 1, 1440,
               grupo="Seguridad"),
+    Parametro("backup_hora", "Hora de la copia diaria", "entero", 21, 0, 23,
+              ayuda="Hora del día (0 a 23, hora de Bogotá). Si el programa está abierto a "
+                    "esa hora, hace la copia de seguridad sola. También se hace al cerrar.",
+              grupo="Copias de seguridad"),
+    Parametro("backup_destino", "Carpeta del disco externo o USB", "texto", "",
+              largo_maximo=500, grupo="Copias de seguridad", oculto=True,
+              ayuda="Se elige en Copias de seguridad. Vacío = solo en este PC."),
     Parametro("gimnasio_nombre", "Nombre del gimnasio", "texto", "Enforma",
               largo_maximo=120, grupo="Datos del gimnasio"),
     Parametro("gimnasio_nit", "NIT", "texto", "", largo_maximo=30, grupo="Datos del gimnasio"),

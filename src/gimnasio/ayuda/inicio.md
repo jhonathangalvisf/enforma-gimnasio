@@ -14,6 +14,7 @@ Si se equivoca varias veces seguidas (5 por defecto), el usuario queda **bloquea
 ## Cómo está organizada la pantalla
 
 - **Arriba:** el nombre del gimnasio, la **búsqueda de clientes** (Ctrl+K), su nombre y rol, y los botones **Cambiar contraseña** y **Cerrar sesión**.
+- **Debajo, a veces:** una **barra amarilla** con avisos de las copias de seguridad, por ejemplo si la última copia tiene más de 2 días (ver [Copias de seguridad](tema:backups)). Si usted es de Recepción y la ve, avise al administrador.
 - **A la izquierda:** el menú con los módulos. Cada persona ve solo los módulos que su rol puede usar.
 - **En el centro:** la pantalla del módulo elegido.
 
@@ -27,12 +28,13 @@ Si se equivoca varias veces seguidas (5 por defecto), el usuario queda **bloquea
 | [Pagos](tema:pagos) | Ver la caja del día; las membresías y los pagos se registran en la ficha del cliente. |
 | [Reportes](tema:reportes) | Todos los reportes con filtros, en pantalla, Excel o PDF. |
 | [Configuración](tema:configuracion) | Parámetros, planes, usuarios y auditoría (solo administrador). |
+| [Copias de seguridad](tema:backups) | Copias cifradas, disco externo y restauración (solo administrador). |
 | Ayuda | Esta explicación. |
 
 ## Los dos roles
 
 - **Recepción:** registra ingresos, clientes, membresías, pagos, casilleros e invitados, y ve los reportes del día. No puede anular pagos, cambiar precios, borrar asistencias de días anteriores ni entrar a Configuración.
-- **Administrador:** puede hacer todo, incluidas las anulaciones, los descuentos, los reportes de ingresos, la configuración, los usuarios y la auditoría.
+- **Administrador:** puede hacer todo, incluidas las anulaciones, los descuentos, los reportes de ingresos, la configuración, los usuarios, la auditoría y las copias de seguridad.
 
 El sistema revisa los permisos cada vez que alguien hace algo. Si un usuario intenta una acción que no le corresponde, aparece un aviso y no se hace nada.
 

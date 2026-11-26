@@ -48,7 +48,7 @@ docs/
 ## Comandos (actualizar cuando existan)
 - Entorno: `py -3.12 -m venv .venv` y `.venv\Scripts\activate`
 - Instalar: `pip install -r requirements.txt` y luego `pip install -e .` (registra el paquete `gimnasio`)
-- Ejecutar: `python -m gimnasio.app` (actualiza la base y abre la interfaz; `--solo-migrar` solo prepara la base)
+- Ejecutar: `python -m gimnasio.app` (actualiza la base y abre la interfaz; al cerrar hace la copia de seguridad; `--solo-migrar` solo prepara la base)
 - Pruebas: `pytest -q` (las de pantallas usan Qt en modo offscreen; en Linux sin pantalla: `QT_QPA_PLATFORM=offscreen pytest -q`)
 - Migraciones: `alembic upgrade head`
 - Datos de prueba: `python scripts/seed_datos.py --db datos_prueba.db` (sin `--db` usa la base configurada en `%APPDATA%\Enforma`)
@@ -56,5 +56,7 @@ docs/
 - Medir Recepción y reportes de asistencia: `python scripts/medir_asistencia.py --db datos_prueba.db`
 - Medir invitados: `python scripts/medir_invitados.py --db datos_prueba.db`
 - Medir reportes: `python scripts/medir_reportes.py --db datos_prueba.db`
+- Verificar la última copia de seguridad: `python scripts/verificar_backup.py` (o `--archivo ruta.enfbak`)
+- Medir copias de seguridad: `python scripts/medir_backup.py --db datos_prueba.db`
 - Nueva migración: `alembic revision --autogenerate -m "descripcion"` y revisar el archivo generado
 - Regenerar requirements.txt: `uv pip compile requirements.in --python-platform windows --python-version 3.12 -o requirements.txt`

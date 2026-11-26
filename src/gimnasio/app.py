@@ -1,7 +1,7 @@
 """Punto de arranque: python -m gimnasio.app
 
 Actualiza la base de datos (migraciones) y abre la interfaz. Con --solo-migrar
-solo prepara la base, sin abrir ventanas.
+solo prepara la base, sin abrir ventanas. Al cerrar hace la copia de seguridad.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ def main(argumentos: list[str] | None = None) -> int:
     aplicacion = Aplicacion(app, servicios)
     QTimer.singleShot(0, aplicacion.iniciar)
     codigo = app.exec()
+    aplicacion.copia_al_cerrar()  # copia automática al cerrar (sección 8)
     motor.dispose()
     return codigo
 

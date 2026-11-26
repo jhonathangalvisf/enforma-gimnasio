@@ -7,10 +7,12 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from gimnasio.backup.protector import ProtectorClave
 from gimnasio.modelos import ahora_utc
 from gimnasio.servicios.alertas import ServicioAlertas
 from gimnasio.servicios.asistencia import ServicioAsistencia
 from gimnasio.servicios.ayuda import ServicioAyuda
+from gimnasio.servicios.backups import ServicioBackups
 from gimnasio.servicios.auditoria import ServicioAuditoria
 from gimnasio.servicios.casilleros import ServicioCasilleros
 from gimnasio.servicios.clientes import ServicioClientes
@@ -38,11 +40,14 @@ class Servicios:
     invitados: ServicioInvitados
     reportes: ServicioReportes
     ayuda: ServicioAyuda
+    backups: ServicioBackups
 
 
 def crear_servicios(
-    fabrica: sessionmaker[Session], carpeta_datos: Path | None = None, reloj: Reloj = ahora_utc
+    fabrica: sessionmaker[Session], carpeta_datos: Path | None = None, reloj: Reloj = ahora_utc,
+    protector_clave: ProtectorClave | None = None,
 ) -> Servicios:
+    """`protector_clave` permite a las pruebas reemplazar la protección de Windows."""
     configuracion = ServicioConfiguracion(fabrica, carpeta_datos)
     sesion = ServicioSesion(fabrica, configuracion, reloj)
     pagos = ServicioPagos(fabrica, configuracion, carpeta_datos, reloj)
@@ -64,4 +69,5 @@ def crear_servicios(
         reportes=ServicioReportes(fabrica, configuracion, pagos, asistencia, casilleros,
                                   invitados, carpeta_datos, reloj),
         ayuda=ServicioAyuda(),
+        backups=ServicioBackups(fabrica, configuracion, carpeta_datos, reloj, protector_clave),
     )

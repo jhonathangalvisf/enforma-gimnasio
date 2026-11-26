@@ -1,5 +1,47 @@
 # Progreso
 
+## Fase 9 — Copias de seguridad y restauración ✅ (26/11/2026)
+
+### Qué se hizo
+- **Núcleo** (`src/gimnasio/backup/`):
+  - `paquete.py`: instantánea con la API de backup de SQLite (sirve con la base en uso, incluye lo que está en el WAL), `PRAGMA integrity_check` sobre la copia, zip con la base, las fotos de los clientes, el logo y un `manifiesto.json` (versión del esquema y conteos). Recibos y reportes no van: se regeneran.
+  - `cifrado.py`: formato `.enfbak` = encabezado JSON sin cifrar (fecha, tipo, revisión, parámetros de scrypt, sal y nonce; nunca datos de clientes) + zip cifrado con **AES-256-GCM**, clave derivada con **scrypt** (n=2^15, r=8, p=1). El encabezado va como datos asociados de GCM: cualquier cambio en el encabezado o en el contenido hace fallar el descifrado.
+  - `rotacion.py`: 7 diarias, 4 semanales y 12 mensuales (la más reciente de cada grupo, en días de Bogotá; se cuentan días *con copia*).
+  - `protector.py`: guarda la contraseña de backups protegida con **DPAPI de Windows** (ctypes, sin dependencias) en `<datos>/clave_backups.bin`, que no entra en las copias. Fuera de Windows (desarrollo/pruebas) se guarda sin protección y la pantalla lo dice.
+- **`servicios/backups.py`** (`ServicioBackups`): crear copia (preparar → ejecutar → registrar, para correr la parte pesada en otro hilo sin compartir conexiones), escritura a temporal + relectura con SHA-256 + `os.replace`, copia en el PC (`<datos>/backups`) y en el disco externo/USB si está configurado y conectado (si no, queda en el PC y avisa), rotación por destino, "Copiar a otro disco" (3.ª copia, recordatorio semanal), verificar, restaurar, estado para los avisos y `toca_copia_diaria`. Todo queda en `backups_log` (una fila por destino) y en la auditoría (`backup_creado`, `backup_fallido`, `backup_restaurado`, `backup_copiado_externo`, `backup_clave_configurada/cambiada`).
+- **Restaurar:** descifra y revisa en una carpeta temporal (integridad, que tenga usuarios, que la versión del esquema la conozca el programa), relee al usuario (si lo desactivaron no restaura), hace una copia **"antes de restaurar"** del estado actual (se guardan las 5 últimas), cierra el motor, reemplaza base, fotos y logo, borra `-wal`/`-shm`, corre las migraciones (una copia de una versión anterior se actualiza sola), vuelve a poner el historial de copias que no estaba en la copia y registra la restauración. La interfaz vuelve al inicio de sesión.
+- **Migración `0007`:** `backups_log.tipo` acepta `seguridad`, CHECK de `resultado` (`exitoso`/`fallido`) e índice por fecha. Probada ida y vuelta (upgrade/downgrade).
+- **Parámetros:** `backup_hora` (21 = 9:00 p. m., en Configuración → Parámetros → Copias de seguridad) y `backup_destino` (oculto en Parámetros; se elige desde la pantalla de copias). Nuevo campo `oculto` en `Parametro`.
+- **Interfaz:**
+  - Módulo **Copias de seguridad** (solo admin, `ui/backups.py`): estado (última copia buena, hora diaria, disco externo conectado o no, contraseña, última copia fuera del local), Backup ahora, Elegir/Quitar disco externo, Copiar a otro disco, Crear/Cambiar contraseña (con advertencia y casilla "la guardé en un lugar seguro"), lista de copias (PC, disco externo y "antes de restaurar") con Verificar, Restaurar y Restaurar desde un archivo, e Historial de intentos.
+  - **Barra amarilla** bajo la barra superior: copia buena de más de 2 días o ninguna (todos; Recepción con "Avise al administrador"), falta contraseña, disco desconectado y recordatorio semanal (solo admin). No toma el foco: el campo de código de Recepción sigue listo. Se oculta en pantalla completa.
+  - **Copia diaria** en segundo plano (`QThread`) revisada cada minuto en `Aplicacion`, también con la pantalla de inicio de sesión abierta; si falla, reintenta cada hora. **Copia al cerrar** en `app.py` con ventana de espera, sin importar quién cierre.
+- `scripts/verificar_backup.py`: restaura la última copia (del PC y del disco externo configurado, o `--archivo`/`--carpeta`) en una carpeta temporal y comprueba integridad, esquema y datos; código de salida 0/1. `scripts/medir_backup.py`: mide crear, verificar y restaurar con la base de prueba.
+- Ayuda: tema **Copias de seguridad** reescrito (contraseña, cuándo se hacen, 3-2-1, rotación, avisos, verificar, restaurar, cambio de PC, preguntas frecuentes); parámetro nuevo en Configuración y módulo nuevo en Primeros pasos.
+- 38 pruebas nuevas (424 en total): ida y vuelta (crear, cifrar, restaurar, comparar; criterio 8 de la sección 12), clave incorrecta, archivo y encabezado alterados, PC + USB, USB desconectado, sin contraseña, permisos de Recepción, alerta de 2 días, copia diaria y reintento, rotación (unidad y con archivos), tercera copia y recordatorio, restaurar (estado, fotos, copia previa, historial, auditoría), clave incorrecta sin tocar nada, copia de versión nueva rechazada, copia de versión vieja actualizada, usuario desactivado, CHECKs de la tabla, el script de verificación y las pantallas.
+
+### Resultados medidos (base de prueba de 59 MB: 12.000 clientes, 100.000 pagos, 231.000 asistencias)
+| Operación | Tiempo |
+|---|---:|
+| Crear copia (instantánea + integridad + zip + cifrado + escritura verificada) | 3,3 s |
+| Archivo resultante | 15,4 MB |
+| Verificar copia | 1,2 s |
+| Restaurar (incluye la copia previa) | 4,7 s |
+
+### Decisiones
+- **Contraseña guardada con DPAPI** (confirmado por el dueño): las copias automáticas no la piden; para restaurar siempre se escribe. Cambiarla no recifra las copias viejas (siguen con la anterior). En otro PC hay que crearla de nuevo.
+- **Hora diaria 9:00 p. m.** por defecto (confirmado). Si el programa está cerrado a esa hora, cuenta la copia al cerrar.
+- **Copia al cerrar sin importar quién cierre** (confirmado), también desde la pantalla de inicio de sesión. Sin contraseña queda registrada como fallida.
+- **Aviso de más de 2 días para todos** (confirmado): Recepción ve "Avise al administrador"; los demás avisos solo el admin.
+- Las copias "antes de restaurar" no cuentan para la alerta ni para la rotación 7/4/12; se guardan las 5 últimas en `backups/antes_de_restaurar/`.
+- La copia del disco que se lleva fuera del local no se rota (el programa no la controla).
+- Las copias se escriben enteras en memoria (archivo de ~15 MB con 12.000 clientes); si la base crece mucho se puede pasar a cifrado por bloques.
+- Capturas en `/mnt/project-files/fase9/`.
+
+### Pendientes / para fases siguientes
+- Fase 11: probar DPAPI en el PC del gimnasio (la protección real solo existe en Windows; aquí se probó con un protector falso) e incluir el manual breve de respaldo.
+- Lista del dueño (PLAN, sección 4): hacer una copia, restaurarla en otra carpeta con `verificar_backup.py`, guardar la contraseña en lugar seguro y llevar una copia semanal fuera del local.
+
 ## Fase 8 — Ayuda integrada ✅ (26/11/2026)
 
 ### Qué se hizo

@@ -68,7 +68,12 @@ class Auditoria(Base):
 
 class BackupLog(Base):
     __tablename__ = "backups_log"
-    __table_args__ = (CheckConstraint("tipo IN ('automatico','manual')", name="tipo"),)
+    # seguridad = copia automática que se hace justo antes de restaurar otra.
+    __table_args__ = (
+        CheckConstraint("tipo IN ('automatico','manual','seguridad')", name="tipo"),
+        CheckConstraint("resultado IN ('exitoso','fallido')", name="resultado"),
+        Index("ix_backups_log_fecha_hora", "fecha_hora"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     fecha_hora: Mapped[datetime] = mapped_column(FechaHoraUTC, default=ahora_utc)
