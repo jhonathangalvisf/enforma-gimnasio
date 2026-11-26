@@ -31,3 +31,13 @@ def leer_fecha(texto: str) -> date | None:
         return datetime.strptime(texto, FORMATO_FECHA).date()
     except ValueError:
         raise ValueError(f"La fecha «{texto}» no es válida. Use el formato dd/mm/aaaa.") from None
+
+
+def tamano_archivo(bytes_: int | None) -> str:
+    """1536000 -> '1,5 MB'."""
+    if bytes_ is None:
+        return "—"
+    for unidad, factor in (("GB", 1024 ** 3), ("MB", 1024 ** 2), ("KB", 1024)):
+        if bytes_ >= factor:
+            return f"{bytes_ / factor:.1f} {unidad}".replace(".", ",")
+    return f"{bytes_} B"

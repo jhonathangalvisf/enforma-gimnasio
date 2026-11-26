@@ -19,7 +19,8 @@ from gimnasio.ui.ventana_principal import VentanaPrincipal  # noqa: E402
 ESPERADO = {
     "recepcion": "recepcion", "clientes": "clientes", "asistencia": "asistencia",
     "casilleros": "casilleros", "invitados": "invitados", "pagos": "pagos",
-    "reportes": "reportes", "configuracion": "configuracion", "ayuda": "inicio",
+    "reportes": "reportes", "configuracion": "configuracion", "backups": "backups",
+    "ayuda": "inicio",
 }
 
 

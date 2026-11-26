@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
+    QApplication, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -23,6 +23,7 @@ from gimnasio.ui.configuracion import PantallaConfiguracion
 from gimnasio.ui.dialogos import DialogoCambiarClave
 from gimnasio.ui.asistencia import PantallaAsistencia
 from gimnasio.ui.ayuda import DialogoAyuda, PantallaAyuda, tema_para
+from gimnasio.ui.backups import PantallaBackups, textos_aviso
 from gimnasio.ui.casilleros import PantallaCasilleros
 from gimnasio.ui.invitados import PantallaInvitados
 from gimnasio.ui.pagos import PantallaPagos
@@ -30,6 +31,7 @@ from gimnasio.ui.recepcion import PantallaRecepcion
 from gimnasio.ui.reportes import PantallaReportes
 
 INTERVALO_REVISION_MS = 15_000
+INTERVALO_AVISO_BACKUP_MS = 10 * 60_000
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,8 @@ MODULOS: tuple[Modulo, ...] = (
            "Reportes con filtros, exportación a Excel y PDF."),
     Modulo("configuracion", "Configuración", Permiso.CONFIGURACION,
            "Parámetros, usuarios, planes y auditoría."),
+    Modulo("backups", "Copias de seguridad", Permiso.BACKUPS,
+           "Copias cifradas, disco externo, restauración y contraseña de las copias."),
     Modulo("ayuda", "Ayuda", Permiso.AYUDA,
            "Explicación de cada módulo en lenguaje sencillo (F1)."),
 )
@@ -132,6 +136,8 @@ class VentanaPrincipal(QMainWindow):
         self._pantalla_completa = False
         self.barra_superior = self._crear_barra_superior(nombre)
         capa.addWidget(self.barra_superior)
+        self.aviso_backup = self._crear_aviso_backup()
+        capa.addWidget(self.aviso_backup)
         cuerpo = QHBoxLayout()
         cuerpo.setSpacing(0)
         self.navegacion = QListWidget()
@@ -152,6 +158,8 @@ class VentanaPrincipal(QMainWindow):
         self.ficha_abierta: DialogoFicha | None = None
         self.pantalla_ayuda: PantallaAyuda | None = None
         self.ventana_ayuda: DialogoAyuda | None = None
+        self.pantalla_backups: PantallaBackups | None = None
+        self.aviso_cierre = ""  # mensaje para el inicio de sesión (p. ej. tras restaurar)
         self._indices: dict[str, int] = {}
         for modulo in MODULOS:
             if not actual.puede(modulo.permiso):
@@ -178,6 +186,11 @@ class VentanaPrincipal(QMainWindow):
         self._temporizador.setInterval(INTERVALO_REVISION_MS)
         self._temporizador.timeout.connect(self.revisar_inactividad)
         self._temporizador.start()
+        self.actualizar_aviso_backup()
+        self._temporizador_aviso = QTimer(self)
+        self._temporizador_aviso.setInterval(INTERVALO_AVISO_BACKUP_MS)
+        self._temporizador_aviso.timeout.connect(self.actualizar_aviso_backup)
+        self._temporizador_aviso.start()
 
     # --- construcción -------------------------------------------------------
     def _crear_barra_superior(self, nombre: str) -> QWidget:
@@ -205,6 +218,34 @@ class VentanaPrincipal(QMainWindow):
         capa.addWidget(self.boton_clave)
         capa.addWidget(self.boton_cerrar)
         return barra
+
+    def _crear_aviso_backup(self) -> QWidget:
+        """Barra amarilla bajo la barra superior: copia vieja, falta contraseña, disco
+        desconectado o recordatorio semanal. No toma el foco (Recepción sigue lista)."""
+        aviso = QWidget()
+        aviso.setObjectName("avisoBackup")
+        capa = QHBoxLayout(aviso)
+        capa.setContentsMargins(18, 8, 18, 8)
+        self.texto_aviso_backup = QLabel()
+        self.texto_aviso_backup.setWordWrap(True)
+        capa.addWidget(self.texto_aviso_backup, 1)
+        self.boton_aviso_backup = boton("Ir a Copias de seguridad")
+        self.boton_aviso_backup.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.boton_aviso_backup.clicked.connect(lambda: self.ir_a("backups"))
+        self.boton_aviso_backup.setVisible(self.actual.puede(Permiso.BACKUPS))
+        capa.addWidget(self.boton_aviso_backup)
+        aviso.hide()
+        return aviso
+
+    def actualizar_aviso_backup(self) -> list[str]:
+        try:
+            estado = self._servicios.backups.estado(self.actual)
+        except Exception:  # noqa: BLE001 - el aviso nunca debe impedir trabajar
+            return []
+        avisos = textos_aviso(estado, self.actual.puede(Permiso.BACKUPS))
+        self.texto_aviso_backup.setText("\n".join(f"⚠ {a}" for a in avisos))
+        self.aviso_backup.setVisible(bool(avisos) and not self._pantalla_completa)
+        return avisos
 
     def _crear_pantalla(self, modulo: Modulo) -> QWidget:
         if modulo.clave == "configuracion":
@@ -235,6 +276,11 @@ class VentanaPrincipal(QMainWindow):
         if modulo.clave == "reportes":
             self.pantalla_reportes = PantallaReportes(self._servicios, self.actual)
             return self.pantalla_reportes
+        if modulo.clave == "backups":
+            self.pantalla_backups = PantallaBackups(self._servicios, self.actual)
+            self.pantalla_backups.estado_cambiado.connect(self.actualizar_aviso_backup)
+            self.pantalla_backups.restaurado.connect(self.terminar_por_restauracion)
+            return self.pantalla_backups
         if modulo.clave == "ayuda":
             self.pantalla_ayuda = PantallaAyuda(self._servicios, self.actual)
             return self.pantalla_ayuda
@@ -264,6 +310,10 @@ class VentanaPrincipal(QMainWindow):
         self.barra_superior.setVisible(not self._pantalla_completa)
         self.navegacion.setVisible(not self._pantalla_completa)
         self.statusBar().setVisible(not self._pantalla_completa)
+        if self._pantalla_completa:
+            self.aviso_backup.hide()
+        else:
+            self.actualizar_aviso_backup()
         if self._pantalla_completa:
             self.showFullScreen()
         else:
@@ -381,8 +431,20 @@ class VentanaPrincipal(QMainWindow):
         self.close()
         self.sesion_cerrada.emit(por_inactividad)
 
+    def terminar_por_restauracion(self) -> None:
+        """Tras restaurar, los datos (y quizá los usuarios) cambiaron: se vuelve al
+        inicio de sesión sin registrar el cierre en la base nueva."""
+        if self._cerrando_sesion:
+            return
+        self._cerrando_sesion = True
+        self.aviso_cierre = "Se restauró una copia de seguridad. Inicie sesión de nuevo."
+        self._detener()
+        self.close()
+        self.sesion_cerrada.emit(False)
+
     def _detener(self) -> None:
         self._temporizador.stop()
+        self._temporizador_aviso.stop()
         app = QApplication.instance()
         if app:
             app.removeEventFilter(self._filtro)

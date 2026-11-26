@@ -70,6 +70,12 @@ ACCIONES = {
     "invitado_visita_autorizada": "Visita de invitado autorizada por encima del límite",
     "invitado_visita_eliminada": "Visita de invitado eliminada",
     "invitados_exportados": "Reporte de invitados exportado",
+    "backup_creado": "Copia de seguridad creada",
+    "backup_fallido": "Copia de seguridad fallida",
+    "backup_restaurado": "Copia de seguridad restaurada",
+    "backup_copiado_externo": "Copia llevada a otro disco",
+    "backup_clave_configurada": "Contraseña de copias configurada",
+    "backup_clave_cambiada": "Contraseña de copias cambiada",
 }
 
 _CAMPOS_PROHIBIDOS = {"clave", "hash_clave", "contrasena", "password"}

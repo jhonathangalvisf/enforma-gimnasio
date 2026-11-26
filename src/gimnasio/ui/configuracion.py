@@ -38,6 +38,8 @@ class PestanaParametros(QWidget):
         capa = QVBoxLayout(contenido)
         grupos: dict[str, QFormLayout] = {}
         for p in PARAMETROS:
+            if p.oculto:
+                continue
             if p.grupo not in grupos:
                 caja = QGroupBox(p.grupo)
                 grupos[p.grupo] = QFormLayout(caja)

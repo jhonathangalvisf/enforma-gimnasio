@@ -51,6 +51,9 @@ QMainWindow, QDialog {{ background: {GRIS_FONDO}; }}
 #contadorInvitado {{ font-size: 30pt; font-weight: 700; color: {AZUL}; }}
 #contadorTexto {{ font-size: 12pt; font-weight: 600; color: {AZUL}; }}
 #avisoLimite {{ color: {ROJO}; font-weight: 600; }}
+#avisoBackup {{ background: #fff4d6; border-bottom: 1px solid #e3c46b; }}
+#avisoBackup QLabel {{ color: #6b4e00; font-weight: 600; }}
+#avisoClave {{ color: {ROJO}; font-weight: 600; }}
 
 QLineEdit, QSpinBox, QComboBox, QDateEdit {{
     background: white; border: 1px solid {GRIS_BORDE}; border-radius: 4px; padding: 5px 7px;

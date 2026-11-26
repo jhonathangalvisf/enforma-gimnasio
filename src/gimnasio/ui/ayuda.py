@@ -36,6 +36,7 @@ TEMA_POR_ARCHIVO = {
     "pagos": "pagos",
     "reportes": "reportes",
     "configuracion": "configuracion",
+    "backups": "backups",
     "dialogos": TEMA_INICIO,
 }
 
