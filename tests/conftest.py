@@ -55,3 +55,50 @@ def datos_basicos(sesion):
     sesion.add_all(casilleros)
     sesion.commit()
     return usuario, clientes, casilleros
+
+
+class RelojFalso:
+    """Reloj controlable para probar bloqueos e inactividad sin esperar."""
+
+    def __init__(self):
+        from datetime import datetime, timezone
+
+        self.ahora = datetime(2026, 11, 26, 15, 0, tzinfo=timezone.utc)
+
+    def __call__(self):
+        return self.ahora
+
+    def avanzar(self, **delta):
+        from datetime import timedelta
+
+        self.ahora += timedelta(**delta)
+
+
+CLAVE_PRUEBA = "ClaveSegura1"
+
+
+@pytest.fixture
+def reloj():
+    return RelojFalso()
+
+
+@pytest.fixture
+def servicios(motor, reloj, tmp_path):
+    from gimnasio.servicios.contenedor import crear_servicios
+
+    return crear_servicios(crear_fabrica_sesiones(motor), carpeta_datos=tmp_path, reloj=reloj)
+
+
+@pytest.fixture
+def admin(servicios):
+    """Primer administrador creado como en el primer arranque."""
+    return servicios.usuarios.crear_primer_administrador("Ana Admin", "admin", CLAVE_PRUEBA)
+
+
+@pytest.fixture
+def recepcion(servicios, admin):
+    datos = servicios.usuarios.crear(admin, "Rita Recepción", "rita", "recepcion", CLAVE_PRUEBA)
+    from gimnasio.servicios.permisos import UsuarioActual
+
+    return UsuarioActual(id=datos.id, usuario=datos.usuario,
+                         nombre_completo=datos.nombre_completo, rol=datos.rol)

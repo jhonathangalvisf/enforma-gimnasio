@@ -48,8 +48,8 @@ docs/
 ## Comandos (actualizar cuando existan)
 - Entorno: `py -3.12 -m venv .venv` y `.venv\Scripts\activate`
 - Instalar: `pip install -r requirements.txt` y luego `pip install -e .` (registra el paquete `gimnasio`)
-- Ejecutar: `python -m gimnasio.app` (en la Fase 0 solo crea/actualiza la base)
-- Pruebas: `pytest -q`
+- Ejecutar: `python -m gimnasio.app` (actualiza la base y abre la interfaz; `--solo-migrar` solo prepara la base)
+- Pruebas: `pytest -q` (las de pantallas usan Qt en modo offscreen; en Linux sin pantalla: `QT_QPA_PLATFORM=offscreen pytest -q`)
 - Migraciones: `alembic upgrade head`
 - Datos de prueba: `python scripts/seed_datos.py --db datos_prueba.db` (sin `--db` usa la base configurada en `%APPDATA%\Enforma`)
 - Nueva migración: `alembic revision --autogenerate -m "descripcion"` y revisar el archivo generado

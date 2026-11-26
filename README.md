@@ -15,4 +15,7 @@ pip install -e .
 alembic upgrade head
 pytest -q
 python scripts/seed_datos.py --db datos_prueba.db
+python -m gimnasio.app
 ```
+
+La primera vez que se abre con una base vacía pide crear el administrador. Para probar con la base de datos falsa: `set ENFORMA_DB_URL=sqlite:///datos_prueba.db` antes de `python -m gimnasio.app` (usuarios `admin`, `recepcion1`, `recepcion2`, clave `Enforma2026!`).

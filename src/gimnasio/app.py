@@ -1,19 +1,46 @@
 """Punto de arranque: python -m gimnasio.app
 
-En la Fase 0 solo prepara la base de datos. La ventana principal llega en la Fase 1.
+Actualiza la base de datos (migraciones) y abre la interfaz. Con --solo-migrar
+solo prepara la base, sin abrir ventanas.
 """
 
 from __future__ import annotations
 
+import argparse
+import sys
+
 from gimnasio.config import ruta_base_datos
+from gimnasio.db.engine import crear_fabrica_sesiones, crear_motor
 from gimnasio.db.migraciones import actualizar_esquema
 
 
-def main() -> None:
+def main(argumentos: list[str] | None = None) -> int:
+    analizador = argparse.ArgumentParser(description="Sistema de gestión del gimnasio Enforma")
+    analizador.add_argument("--solo-migrar", action="store_true",
+                            help="crear o actualizar la base de datos y salir")
+    opciones = analizador.parse_args(argumentos)
+
     actualizar_esquema()
-    print(f"Base de datos lista en {ruta_base_datos()}")
-    print("La interfaz gráfica se construye en la Fase 1.")
+    if opciones.solo_migrar:
+        print(f"Base de datos lista en {ruta_base_datos()}")
+        return 0
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from gimnasio.servicios.contenedor import crear_servicios
+    from gimnasio.ui.aplicacion import Aplicacion
+
+    app = QApplication(sys.argv)
+    app.setApplicationName("Enforma")
+    motor = crear_motor()
+    servicios = crear_servicios(crear_fabrica_sesiones(motor))
+    aplicacion = Aplicacion(app, servicios)
+    QTimer.singleShot(0, aplicacion.iniciar)
+    codigo = app.exec()
+    motor.dispose()
+    return codigo
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
