@@ -9,8 +9,8 @@ from collections.abc import Callable
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QDialog, QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QMessageBox,
-    QTabWidget, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel,
+    QLineEdit, QMessageBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha, fecha_hora_local, pesos
@@ -23,6 +23,7 @@ from gimnasio.servicios.pagos import CONCEPTOS, METODOS, numero_recibo
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
 from gimnasio.ui.clientes import COLOR_VIGENCIA, texto_vigencia
 from gimnasio.ui.comunes import boton, celda, etiqueta, mostrar_error, tabla
+from gimnasio.ui.dialogos import _DialogoBase
 
 RESULTADOS = {
     "permitido": "Permitido", "por_vencer": "Por vencer", "vencido": "Vencido",
@@ -31,7 +32,7 @@ RESULTADOS = {
 NIVELES = {"info": "Información", "advertencia": "Advertencia", "critica": "Crítica"}
 ZONAS = {"hombres": "Hombres", "mujeres": "Mujeres", "mixto": "Mixto"}
 
-PESTANA_MEMBRESIAS, PESTANA_PAGOS = 2, 3
+PESTANA_MEMBRESIAS, PESTANA_PAGOS, PESTANA_ALERTAS = 2, 3, 6
 
 # Decisión al inactivar un cliente con casillero.
 LIBERAR, CONSERVAR, CANCELAR = "liberar", "conservar", "cancelar"
@@ -268,14 +269,28 @@ class DialogoFicha(QDialog):
         ), 1)
         self.pestanas.addTab(casillero, "Casillero")
         activas = sum(1 for a in f.alertas if a.activa)
-        self.pestanas.addTab(_tabla_con(
+        barra = QHBoxLayout()
+        self.boton_alerta = boton("Nueva alerta…")
+        self.boton_resolver = boton("Marcar como resuelta")
+        puede = self._actual.puede(Permiso.GESTIONAR_ALERTAS)
+        for b in (self.boton_alerta, self.boton_resolver):
+            b.setEnabled(puede)
+            barra.addWidget(b)
+        barra.addStretch()
+        self.boton_alerta.clicked.connect(self.nueva_alerta)
+        self.boton_resolver.clicked.connect(self.resolver_alerta)
+        pestana = _tabla_con(
             ["Mensaje", "Nivel", "Desde", "Hasta", "Estado"],
             [[a.mensaje, NIVELES.get(a.nivel, a.nivel),
               celda(fecha(a.fecha_inicio), orden=a.fecha_inicio),
               fecha(a.fecha_fin) if a.fecha_fin else "", "Activa" if a.activa else "Resuelta"]
              for a in f.alertas],
-            "No tiene alertas. Las alertas manuales se crean desde Recepción (Fase 4).",
-        ), f"Alertas ({activas})")
+            "No tiene alertas. Una alerta aparece en Recepción cada vez que el cliente "
+            "ingresa, hasta que se marque como resuelta.",
+            datos=[a.id for a in f.alertas], botones=barra,
+        )
+        self.tabla_alertas = getattr(pestana, "tabla", None)
+        self.pestanas.addTab(pestana, f"Alertas ({activas})")
 
     def _pestana_membresias(self, f: FichaCliente) -> QWidget:
         barra = QHBoxLayout()
@@ -489,3 +504,72 @@ class DialogoFicha(QDialog):
             mostrar_error(self, e)
             return
         self._recargar_en(PESTANA_MEMBRESIAS)
+
+    # --- alertas --------------------------------------------------------------
+    def nueva_alerta(self) -> None:
+        dialogo = DialogoAlerta(self._servicios, self._actual, self._cliente_id,
+                                self.ficha.nombre_completo, padre=self)
+        if dialogo.exec():
+            self._recargar_en(PESTANA_ALERTAS)
+
+    def resolver_alerta(self) -> None:
+        alerta_id = self._id_seleccionado(self.tabla_alertas)
+        if alerta_id is None:
+            alerta_id = next((a.id for a in self.ficha.alertas if a.activa), None)
+        if alerta_id is None:
+            mostrar_error(self, ErrorValidacion("No hay alertas activas para resolver."))
+            return
+        try:
+            self._servicios.alertas.resolver(self._actual, alerta_id)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            return
+        self._recargar_en(PESTANA_ALERTAS)
+
+
+class DialogoAlerta(_DialogoBase):
+    """Nueva alerta manual: mensaje, nivel y (opcional) hasta qué fecha aplica."""
+
+    def __init__(self, servicios: Servicios, actual: UsuarioActual, cliente_id: int,
+                 nombre_cliente: str, padre: QWidget | None = None):
+        super().__init__("Nueva alerta", f"{nombre_cliente}: se mostrará en Recepción "
+                         "cada vez que ingrese, hasta que se resuelva.", padre)
+        self.setMinimumWidth(480)
+        self._servicios, self._actual, self._cliente_id = servicios, actual, cliente_id
+        self.alerta_id: int | None = None
+        self.campo_mensaje = QLineEdit()
+        self.campo_mensaje.setMaxLength(300)
+        self.campo_mensaje.setPlaceholderText("Ej.: falta copia del documento")
+        self.campo_nivel = QComboBox()
+        for valor, texto in NIVELES.items():
+            self.campo_nivel.addItem(texto, valor)
+        self.campo_hasta = QCheckBox("Solo hasta una fecha")
+        from gimnasio.ui.pagos import campo_fecha
+
+        self.fecha_hasta = campo_fecha(servicios.alertas.hoy())
+        self.fecha_hasta.setEnabled(False)
+        self.campo_hasta.toggled.connect(self.fecha_hasta.setEnabled)
+        self.formulario.addRow("Mensaje", self.campo_mensaje)
+        self.formulario.addRow("Nivel", self.campo_nivel)
+        self.formulario.addRow(self.campo_hasta, self.fecha_hasta)
+        cancelar = boton("Cancelar")
+        self.boton_guardar = boton("Guardar alerta", principal=True)
+        self._botones.addWidget(cancelar)
+        self._botones.addWidget(self.boton_guardar)
+        cancelar.clicked.connect(self.reject)
+        self.boton_guardar.clicked.connect(self.guardar)
+        self.campo_mensaje.returnPressed.connect(self.guardar)
+
+    def guardar(self) -> None:
+        from gimnasio.ui.pagos import leer_fecha
+
+        try:
+            self.alerta_id = self._servicios.alertas.crear(
+                self._actual, self._cliente_id, self.campo_mensaje.text(),
+                self.campo_nivel.currentData(),
+                fecha_fin=leer_fecha(self.fecha_hasta) if self.campo_hasta.isChecked() else None,
+            )
+        except ErrorNegocio as e:
+            self.mostrar_error(str(e))
+            return
+        self.accept()

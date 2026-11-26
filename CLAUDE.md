@@ -53,5 +53,6 @@ docs/
 - Migraciones: `alembic upgrade head`
 - Datos de prueba: `python scripts/seed_datos.py --db datos_prueba.db` (sin `--db` usa la base configurada en `%APPDATA%\Enforma`)
 - Medir búsquedas: `python scripts/medir_busqueda.py --db datos_prueba.db` (meta < 200 ms)
+- Medir Recepción y reportes de asistencia: `python scripts/medir_asistencia.py --db datos_prueba.db`
 - Nueva migración: `alembic revision --autogenerate -m "descripcion"` y revisar el archivo generado
 - Regenerar requirements.txt: `uv pip compile requirements.in --python-platform windows --python-version 3.12 -o requirements.txt`
