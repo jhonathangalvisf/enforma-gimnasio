@@ -134,6 +134,8 @@ def test_cierre_de_caja_recepcion_y_admin(qapp, servicios, admin, recepcion, pla
     p = servicios.pagos.registrar_pago(admin, cliente, DatosPago(10_000, "transferencia", "T1"),
                                        concepto="otro")
     caja = PantallaPagos(servicios, recepcion)
+    assert not caja.desbloqueado and caja.cierre is None  # Recepción: pide la clave
+    assert caja.desbloquear()
     assert not caja.campo_dia.isEnabled() and caja.boton_anular is None
     assert caja.totales["total"].text() == "$ 120.000"
     assert caja.tabla.rowCount() == 1

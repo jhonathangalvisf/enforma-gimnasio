@@ -133,7 +133,7 @@ class ServicioSesion:
                     detalle={"motivo": "no es administrador activo", "para": motivo},
                 )
                 sesion.commit()
-                raise ErrorPermiso("Solo un administrador activo puede autorizar el ingreso.")
+                raise ErrorPermiso("Solo un administrador activo puede autorizar.")
             usuario.intentos_fallidos = 0
             sesion.commit()
             return a_usuario_actual(usuario)

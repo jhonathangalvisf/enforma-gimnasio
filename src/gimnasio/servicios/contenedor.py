@@ -14,6 +14,7 @@ from gimnasio.servicios.asistencia import ServicioAsistencia
 from gimnasio.servicios.ayuda import ServicioAyuda
 from gimnasio.servicios.backups import ServicioBackups
 from gimnasio.servicios.auditoria import ServicioAuditoria
+from gimnasio.servicios.autorizaciones import ServicioAutorizaciones
 from gimnasio.servicios.casilleros import ServicioCasilleros
 from gimnasio.servicios.clientes import ServicioClientes
 from gimnasio.servicios.configuracion import ServicioConfiguracion
@@ -43,6 +44,7 @@ class Servicios:
     ayuda: ServicioAyuda
     backups: ServicioBackups
     depuracion: ServicioDepuracion
+    autorizaciones: ServicioAutorizaciones
 
 
 def crear_servicios(
@@ -52,7 +54,9 @@ def crear_servicios(
     """`protector_clave` permite a las pruebas reemplazar la protección de Windows."""
     configuracion = ServicioConfiguracion(fabrica, carpeta_datos)
     sesion = ServicioSesion(fabrica, configuracion, reloj)
-    pagos = ServicioPagos(fabrica, configuracion, carpeta_datos, reloj)
+    autorizaciones = ServicioAutorizaciones(fabrica, sesion, reloj)
+    pagos = ServicioPagos(fabrica, configuracion, carpeta_datos, reloj,
+                          autorizaciones=autorizaciones)
     asistencia = ServicioAsistencia(fabrica, configuracion, sesion, carpeta_datos, reloj)
     casilleros = ServicioCasilleros(fabrica, configuracion, pagos, carpeta_datos, reloj)
     invitados = ServicioInvitados(fabrica, configuracion, sesion, carpeta_datos, reloj)
@@ -62,7 +66,9 @@ def crear_servicios(
         sesion=sesion,
         usuarios=ServicioUsuarios(fabrica, reloj),
         auditoria=ServicioAuditoria(fabrica),
-        clientes=ServicioClientes(fabrica, configuracion, carpeta_datos, reloj),
+        clientes=ServicioClientes(fabrica, configuracion, carpeta_datos, reloj,
+                                  autorizaciones=autorizaciones),
+        autorizaciones=autorizaciones,
         planes=ServicioPlanes(fabrica),
         pagos=pagos,
         asistencia=asistencia,

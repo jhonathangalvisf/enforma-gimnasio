@@ -12,6 +12,24 @@ from gimnasio.db.migraciones import actualizar_esquema
 from gimnasio.modelos import Casillero, Cliente, Usuario
 
 
+@pytest.fixture(autouse=True)
+def _clave_admin_simulada(request, monkeypatch):
+    """Pagos e inscripciones de Recepción necesitan la clave de un administrador.
+    Las pruebas que no tratan de eso la simulan; las que sí, llevan la marca
+    `clave_admin_real` (ver tests/test_autorizaciones.py)."""
+    if request.node.get_closest_marker("clave_admin_real"):
+        return
+    from gimnasio.servicios.autorizaciones import ServicioAutorizaciones
+
+    monkeypatch.setattr(ServicioAutorizaciones, "verificar",
+                        lambda self, actual, autorizacion, *paras: None)
+    try:
+        import gimnasio.ui.autorizacion as ui_autorizacion
+    except ImportError:  # sin Qt
+        return
+    monkeypatch.setattr(ui_autorizacion, "PEDIR", lambda *args: (True, None))
+
+
 @pytest.fixture
 def url_bd(tmp_path) -> str:
     url = f"sqlite:///{(tmp_path / 'prueba.db').as_posix()}"

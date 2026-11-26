@@ -1,5 +1,23 @@
 # Progreso
 
+## Pagos e inscripciones solo con clave de administrador ✅ (26/11/2026)
+
+### Qué se hizo
+- **`servicios/autorizaciones.py`** (`ServicioAutorizaciones`): `autorizar` comprueba usuario y contraseña de un administrador activo (con `verificar_administrador`: los fallos cuentan para el bloqueo y quedan en la auditoría) y entrega una `Autorizacion` que vive solo en memoria, vence y tiene usos limitados: **pago** (1 cobro, 10 min), **inscripción** (inscribir + su primer cobro, 20 min) y **módulo Pagos** (mientras la pantalla esté abierta). `verificar` se llama antes de guardar y `gastar` después de confirmar: si la operación falla por otra causa la clave sigue sirviendo. Una autorización solo la puede usar el usuario que la pidió.
+- **Servicios protegidos** (Recepción sin autorización recibe `ErrorAutorizacion`; el administrador no la necesita): `registrar_membresia`, `registrar_pago`, `asignar`/`renovar` casillero **con cobro**, `mensualidad_con_casillero`, `clientes.registrar`, `cierre_caja`, `consultar_pagos` y `exportar_consulta`. Auditoría nueva: `autorizacion_admin` (quién autorizó y para quién) y `operacion_autorizada` (en la misma transacción de cada cobro o inscripción).
+- **Pantallas:** ventana "Clave de administrador" (`ui/autorizacion.py`). Se pide al guardar en renovar/registrar membresía (ficha, Ctrl+R, F2), abonos y otros pagos, asignar/renovar casillero con cobro, "Pagar casillero…" e inscripción (una sola vez para inscribir y cobrar). El módulo **Pagos** queda bloqueado para Recepción: al entrar pide la clave y al salir se vuelve a bloquear.
+- El reporte **Cierre de caja** ya no aparece para Recepción en Reportes (lo ve en Pagos con la clave).
+- Ayuda (Pagos, Clientes, Recepción, Usuarios) y tabla de permisos de la especificación actualizadas.
+- 13 pruebas nuevas con la clave de verdad (`tests/test_autorizaciones.py`, marca `clave_admin_real`); las demás pruebas simulan la clave con un fixture de `conftest.py`. Total: 509 pasan.
+
+### Decisiones
+- La clave se pide **cada vez** (elegido por el dueño), con el usuario y la contraseña de cada administrador para saber quién autorizó.
+- Asignar o renovar un casillero **sin cobro**, liberar casilleros, registrar ingresos e invitados siguen sin clave.
+- El borrado de pagos antiguos sigue igual: solo administrador y con su clave aparte.
+
+### Pendientes
+- Ninguno de esta parte.
+
 ## Casillero al inscribir y mensualidad + casillero en un solo recibo ✅ (26/11/2026)
 
 ### Qué se hizo

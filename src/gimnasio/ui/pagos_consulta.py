@@ -29,9 +29,12 @@ class PestanaConsultaPagos(QWidget):
     COLUMNAS = ["Fecha y hora", "Recibo", "Cliente", "Concepto", "Detalle", "Método",
                 "Referencia", "Monto", "Registró", "Estado"]
 
-    def __init__(self, servicios: Servicios, actual: UsuarioActual):
+    def __init__(self, servicios: Servicios, actual: UsuarioActual,
+                 autorizacion: Callable[[], object] = lambda: None):
         super().__init__()
         self._servicios, self._actual = servicios, actual
+        # La autorización del administrador con la que Recepción abrió el módulo.
+        self._autorizacion = autorizacion
         self.abrir: Callable[[Path], None] = abrir_archivo
         self.elegir_ruta: Callable[[str, str], str | None] = self._elegir_ruta
         self.cliente_id: int | None = None
@@ -150,7 +153,8 @@ class PestanaConsultaPagos(QWidget):
 
     def consultar(self) -> None:
         try:
-            self.consulta = self._servicios.pagos.consultar_pagos(self._actual, self.filtros())
+            self.consulta = self._servicios.pagos.consultar_pagos(
+                self._actual, self.filtros(), autorizacion=self._autorizacion())
         except ErrorNegocio as e:
             mostrar_error(self, e)
             return
@@ -202,7 +206,7 @@ class PestanaConsultaPagos(QWidget):
             return None
         try:
             destino = self._servicios.pagos.exportar_consulta(
-                self._actual, self.filtros(), ruta, formato)
+                self._actual, self.filtros(), ruta, formato, autorizacion=self._autorizacion())
         except ErrorNegocio as e:
             mostrar_error(self, e)
             return None

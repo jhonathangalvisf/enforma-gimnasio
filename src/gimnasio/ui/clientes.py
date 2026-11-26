@@ -438,11 +438,11 @@ class PantallaClientes(QWidget):
 
         dialogo = DialogoCliente(self._servicios, self._actual, padre=self)
         if self._ejecutar(dialogo) and dialogo.ficha:
-            self.cobrar_inscripcion(dialogo.ficha, dialogo.quiere_casillero)
+            self.cobrar_inscripcion(dialogo.ficha, dialogo.quiere_casillero, dialogo.autorizacion)
             self.recargar()
             self.abrir_ficha.emit(dialogo.ficha.id)
 
-    def cobrar_inscripcion(self, ficha, con_casillero: bool):
+    def cobrar_inscripcion(self, ficha, con_casillero: bool, autorizacion=None):
         """Después de inscribir: cobra la mensualidad y, si quiere, el casillero en el mismo
         recibo. Si el cliente ya tiene membresía vigente (p. ej. reactivado) no se abre."""
         from gimnasio.ui.pagos import DialogoMembresia
@@ -455,7 +455,8 @@ class PantallaClientes(QWidget):
             dialogo = DialogoMembresia(self._servicios, self._actual, ficha.id,
                                        f"{ficha.nombres} {ficha.apellidos}", padre=self,
                                        con_casillero=con_casillero,
-                                       titulo="Inscripción: pagar mensualidad")
+                                       titulo="Inscripción: pagar mensualidad",
+                                       autorizacion=autorizacion)
         except ErrorNegocio as e:
             mostrar_error(self, e)
             return None

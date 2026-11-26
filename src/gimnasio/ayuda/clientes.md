@@ -44,7 +44,7 @@ La **vigencia** no se escribe a mano: el sistema la calcula cada vez con la últ
 4. Si quiere, agregue fecha de nacimiento (dd/mm/aaaa), dirección, contacto de emergencia, notas y una **foto** (PNG o JPG de máximo 5 MB).
 5. Marque la **autorización de tratamiento de datos** cuando el cliente la firme: se guarda la fecha.
 6. Si el cliente quiere casillero, marque **¿Desea casillero?**.
-7. Pulse **Guardar**.
+7. Pulse **Guardar**. Si quien inscribe es Recepción, un administrador debe escribir su clave (sirve también para el cobro que sigue).
 
 Al guardar se abre de una vez el cobro de la **mensualidad**. Si marcó el casillero, ahí mismo elige **a mano** uno de los casilleros libres de su zona, los días y el valor: la mensualidad y el casillero quedan en **un solo recibo con un solo número**. Si no lo quiere, solo paga la mensualidad; más adelante puede pagar un casillero desde [Pagos](tema:pagos) con **Pagar casillero…**.
 

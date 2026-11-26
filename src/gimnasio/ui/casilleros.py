@@ -28,6 +28,8 @@ from gimnasio.servicios.clientes import NOMBRES_VIGENCIA, SEXOS
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
+from gimnasio.servicios.autorizaciones import PARA_PAGO
+from gimnasio.ui.autorizacion import asegurar_autorizacion, olvidar_autorizacion_si_falla
 from gimnasio.ui.comunes import boton, celda, etiqueta, mostrar_error, tabla
 from gimnasio.ui.dialogos import _DialogoBase
 
@@ -110,6 +112,7 @@ class _CamposPeriodo(QWidget):
 class _DialogoConRecibo(_DialogoBase):
     def __init__(self, titulo: str, subtitulo: str, padre: QWidget | None):
         super().__init__(titulo, subtitulo, padre)
+        self._autorizacion = None  # clave de administrador para cobrar (Recepción)
         from gimnasio.ui.pagos import abrir_archivo
 
         self.abrir: Callable[[Path], None] = abrir_archivo
@@ -198,12 +201,16 @@ class DialogoAsignarCasillero(_DialogoConRecibo):
                 raise ErrorValidacion("Elija el casillero.")
             if self.cliente_id is None:
                 raise ErrorValidacion("Busque y elija el cliente.")
+            pago = self.periodo.datos_pago()
+            if pago is not None and not asegurar_autorizacion(self, PARA_PAGO):
+                return
             self.resultado = self._servicios.casilleros.asignar(
                 self._actual, casillero_id, self.cliente_id,
                 fecha_inicio=self.periodo.leer_inicio(), dias=self.periodo.dias.value(),
-                pago=self.periodo.datos_pago(),
+                pago=pago, autorizacion=self._autorizacion if pago is not None else None,
             )
         except ErrorNegocio as e:
+            olvidar_autorizacion_si_falla(self, e)
             self.mostrar_error(str(e))
             return
         self._recibo(self._servicios, self._actual, self.resultado.pago)
@@ -232,12 +239,17 @@ class DialogoRenovarCasillero(_DialogoConRecibo):
         self.boton_guardar.clicked.connect(self.guardar)
 
     def guardar(self) -> None:
+        pago = self.periodo.datos_pago()
+        if pago is not None and not asegurar_autorizacion(self, PARA_PAGO):
+            return
         try:
             self.resultado = self._servicios.casilleros.renovar(
                 self._actual, self._asignacion_id, fecha_inicio=self.periodo.leer_inicio(),
-                dias=self.periodo.dias.value(), pago=self.periodo.datos_pago(),
+                dias=self.periodo.dias.value(), pago=pago,
+                autorizacion=self._autorizacion if pago is not None else None,
             )
         except ErrorNegocio as e:
+            olvidar_autorizacion_si_falla(self, e)
             self.mostrar_error(str(e))
             return
         self._recibo(self._servicios, self._actual, self.resultado.pago)

@@ -26,6 +26,8 @@ from gimnasio.servicios.clientes import (
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
+from gimnasio.servicios.autorizaciones import PARA_INSCRIPCION
+from gimnasio.ui.autorizacion import asegurar_autorizacion, olvidar_autorizacion_si_falla
 from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
 from gimnasio.ui.dialogos import _DialogoBase
 
@@ -59,6 +61,9 @@ class DialogoCliente(_DialogoBase):
         self._servicios = servicios
         self._actual = actual
         self._existente = existente
+        # Recepción inscribe con la clave de un administrador; la misma sirve para el
+        # primer cobro (ver PantallaClientes.cobrar_inscripcion).
+        self._autorizacion = None
         self.ficha: FichaCliente | None = None
         self.ruta_foto: str | None = None
         self._preguntar = preguntar
@@ -276,13 +281,17 @@ class DialogoCliente(_DialogoBase):
                 clientes.modificar(self._actual, self._existente.id, datos)
                 cliente_id = self._existente.id
             else:
+                if not asegurar_autorizacion(self, PARA_INSCRIPCION):
+                    return
                 cliente_id = clientes.registrar(
-                    self._actual, datos, codigo=codigo if self.puede_codigo else None
+                    self._actual, datos, codigo=codigo if self.puede_codigo else None,
+                    autorizacion=self._autorizacion,
                 ).id
         except ErrorDocumentoRegistrado as e:
             self._documento_registrado(e)
             return
         except (ErrorNegocio, ValueError) as e:
+            olvidar_autorizacion_si_falla(self, e)
             self.mostrar_error(str(e))
             return
         if self.ruta_foto:
@@ -294,6 +303,10 @@ class DialogoCliente(_DialogoBase):
                     "Los datos se guardaron, pero no se pudo copiar la foto."))
         self.ficha = clientes.obtener_ficha(self._actual, cliente_id)
         self.accept()
+
+    @property
+    def autorizacion(self):
+        return self._autorizacion
 
     @property
     def quiere_casillero(self) -> bool:

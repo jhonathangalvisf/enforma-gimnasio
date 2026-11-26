@@ -17,21 +17,23 @@ Aplicación de escritorio para Windows, de un solo puesto (1 PC), sin nube, para
 | Acción | Recepción | Administrador |
 |---|:-:|:-:|
 | Iniciar sesión, registrar asistencia (módulo Recepción) | ✔ | ✔ |
-| Registrar y consultar clientes | ✔ | ✔ |
+| Consultar clientes | ✔ | ✔ |
+| Inscribir clientes nuevos | Con clave de administrador, cada vez | ✔ |
 | Modificar clientes | ✔ (datos de contacto) | ✔ (todo) |
 | Activar / inactivar clientes | ✖ | ✔ |
-| Registrar pagos y membresías | ✔ | ✔ |
+| Registrar pagos y membresías (incluido el cobro del casillero) | Con clave de administrador, cada vez | ✔ |
+| Módulo Pagos (su caja de hoy, consultas) | Con clave de administrador, cada vez que se abre | ✔ |
 | Anular pagos | ✖ | ✔ |
 | Eliminar asistencias | Solo las del día actual, con motivo | Cualquiera, con motivo |
 | Asignar casillero | ✔ | ✔ |
 | Liberar casillero | ✔ | ✔ |
 | Registrar invitados y su asistencia | ✔ | ✔ |
-| Reportes | Básicos (asistencia del día, casilleros) | Todos |
+| Reportes | Básicos (asistencia del día, casilleros, por vencer, invitados del día) | Todos |
 | Planes, precios, casilleros (crear/editar), configuración | ✖ | ✔ |
 | Usuarios, auditoría, backups y restauración | ✖ | ✔ |
 | Ayuda | ✔ | ✔ |
 
-Los permisos se validan en la capa de servicios, no solo ocultando botones.
+Los permisos se validan en la capa de servicios, no solo ocultando botones. La "clave de administrador" es el usuario y la contraseña de un administrador activo: el servicio entrega una autorización que vive en memoria, vence pronto y se gasta con la operación (un cobro; la inscripción y su primer cobro; o el módulo Pagos mientras esté abierto). Queda en la auditoría quién autorizó.
 
 ## 3. Requisitos funcionales por módulo
 

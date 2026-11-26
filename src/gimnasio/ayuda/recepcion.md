@@ -41,7 +41,7 @@ El último día del plan el cliente **todavía puede entrar** (le quedan 0 días
 
 Aparecen dos botones:
 
-- **Renovar ahora (F2):** abre la renovación de la membresía con el último plan del cliente ya elegido. Registre el pago y, al guardar, el ingreso de ese momento pasa a "permitido". No aparece para clientes inactivos. Ver [Pagos y membresías](tema:pagos).
+- **Renovar ahora (F2):** abre la renovación de la membresía con el último plan del cliente ya elegido. Registre el pago (Recepción necesita la clave de un administrador) y, al guardar, el ingreso de ese momento pasa a "permitido". No aparece para clientes inactivos. Ver [Pagos y membresías](tema:pagos).
 - **Ingreso autorizado (F3):** deja entrar al cliente sin renovar. Pide el **usuario y la contraseña de un administrador** y, si quiere, un motivo (por ejemplo "paga mañana"). Queda en la auditoría a nombre del administrador que autorizó. Si un administrador tiene la sesión abierta, su usuario ya aparece escrito y solo pone la contraseña.
 
 Si la contraseña del administrador se escribe mal varias veces, ese usuario se bloquea igual que en el inicio de sesión.

@@ -35,6 +35,9 @@ from gimnasio.modelos import (
 )
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
+from gimnasio.servicios.autorizaciones import (
+    PARA_INSCRIPCION, PARA_PAGO, Autorizacion, registrar_uso,
+)
 from gimnasio.servicios.clientes import NOMBRES_VIGENCIA, SEXOS, Vigencia, calcular_vigencia
 from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.errores import ErrorValidacion
@@ -488,17 +491,26 @@ class ServicioCasilleros:
     def asignar(
         self, actual: UsuarioActual, casillero_id: int, cliente_id: int, *,
         fecha_inicio: date | None = None, dias: int | None = None, pago: DatosPago | None = None,
+        autorizacion: Autorizacion | None = None,
     ) -> AsignacionRegistrada:
+        """Asigna el casillero. Con pago, Recepción necesita la clave de un administrador."""
         exigir(actual, Permiso.ASIGNAR_CASILLERO)
+        admin = None
         if pago is not None:
             exigir(actual, Permiso.REGISTRAR_PAGOS)
+            admin = self._pagos.autorizaciones.verificar(actual, autorizacion, PARA_PAGO)
+        ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
             registrada = self._asignar_en_sesion(
-                sesion, actual, casillero_id, cliente_id, fecha_inicio, dias, pago,
-                self._reloj())
+                sesion, actual, casillero_id, cliente_id, fecha_inicio, dias, pago, ahora)
+            if registrada.pago:
+                registrar_uso(sesion, actual, admin, "pago de casillero", ahora,
+                              recibo=registrada.pago.recibo)
             sesion.commit()
-            return registrada
+        if pago is not None:
+            self._pagos.autorizaciones.gastar(autorizacion)
+        return registrada
 
     def _asignar_en_sesion(
         self, sesion: Session, actual: UsuarioActual, casillero_id: int, cliente_id: int,
@@ -541,17 +553,27 @@ class ServicioCasilleros:
     def renovar(
         self, actual: UsuarioActual, asignacion_id: int, *,
         fecha_inicio: date | None = None, dias: int | None = None, pago: DatosPago | None = None,
+        autorizacion: Autorizacion | None = None,
     ) -> RenovacionRegistrada:
-        """Extiende el vencimiento del casillero (opcionalmente con su pago)."""
+        """Extiende el vencimiento del casillero (opcionalmente con su pago; con pago,
+        Recepción necesita la clave de un administrador)."""
         exigir(actual, Permiso.ASIGNAR_CASILLERO)
+        admin = None
         if pago is not None:
             exigir(actual, Permiso.REGISTRAR_PAGOS)
+            admin = self._pagos.autorizaciones.verificar(actual, autorizacion, PARA_PAGO)
+        ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
             registrada = self._renovar_en_sesion(
-                sesion, actual, asignacion_id, fecha_inicio, dias, pago, self._reloj())
+                sesion, actual, asignacion_id, fecha_inicio, dias, pago, ahora)
+            if registrada.pago:
+                registrar_uso(sesion, actual, admin, "pago de casillero", ahora,
+                              recibo=registrada.pago.recibo)
             sesion.commit()
-            return registrada
+        if pago is not None:
+            self._pagos.autorizaciones.gastar(autorizacion)
+        return registrada
 
     def _renovar_en_sesion(
         self, sesion: Session, actual: UsuarioActual, asignacion_id: int,
@@ -594,6 +616,7 @@ class ServicioCasilleros:
         self, actual: UsuarioActual, cliente_id: int, plan_id: int, *,
         pago: DatosPago, casillero: CasilleroEnRecibo, fecha_inicio: date | None = None,
         precio_pactado: int | None = None, motivo_descuento: str = "",
+        autorizacion: Autorizacion | None = None,
     ) -> MensualidadConCasillero:
         """Mensualidad y casillero pagados juntos: un solo recibo con un solo número.
 
@@ -601,6 +624,8 @@ class ServicioCasilleros:
         Los dos pagos usan el mismo método y referencia. O se guarda todo o nada."""
         exigir(actual, Permiso.REGISTRAR_PAGOS)
         exigir(actual, Permiso.ASIGNAR_CASILLERO)
+        admin = self._pagos.autorizaciones.verificar(
+            actual, autorizacion, PARA_PAGO, PARA_INSCRIPCION)
         if pago is None:
             raise ErrorValidacion(
                 "Para cobrar el casillero en el mismo recibo registre también el pago de "
@@ -629,9 +654,12 @@ class ServicioCasilleros:
                 resultado = self._asignar_en_sesion(
                     sesion, actual, casillero.casillero_id, cliente_id, casillero.fecha_inicio,
                     casillero.dias, pago_casillero, ahora, numero)
+            registrar_uso(sesion, actual, admin, "mensualidad y casillero", ahora,
+                          recibo=membresia.pago.recibo)
             sesion.commit()
-            return MensualidadConCasillero(membresia, resultado, membresia.pago.recibo,
-                                           membresia.pago.id)
+        self._pagos.autorizaciones.gastar(autorizacion)
+        return MensualidadConCasillero(membresia, resultado, membresia.pago.recibo,
+                                       membresia.pago.id)
 
     def corregir_vencimiento(
         self, actual: UsuarioActual, asignacion_id: int, vence: date, motivo: str
