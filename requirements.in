@@ -1,0 +1,15 @@
+# Dependencias directas. requirements.txt se genera desde aquí con:
+#   uv pip compile requirements.in --python-platform windows --python-version 3.12 -o requirements.txt
+PySide6-Essentials   # Qt sin WebEngine (instalador más liviano)
+SQLAlchemy>=2.0
+alembic
+tzdata                # zona horaria America/Bogota en Windows
+argon2-cffi
+cryptography
+openpyxl
+reportlab
+qrcode[pil]
+# Desarrollo y pruebas
+pytest
+Faker
+pyinstaller
