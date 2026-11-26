@@ -111,3 +111,5 @@ El programa **no restaura** si la contraseña es incorrecta, si el archivo está
 **Perdí la contraseña de las copias.** Las copias hechas con ella no se pueden abrir. Cree una contraseña nueva de inmediato (**Cambiar contraseña…**) y pulse **Backup ahora** para tener una copia que sí pueda abrir.
 
 **¿Qué pasa con los recibos y reportes en PDF o Excel?** No van en la copia porque se pueden volver a generar desde el programa.
+
+**¿Cómo compruebo que las copias y la contraseña están bien protegidas?** Abra **menú Inicio → Enforma → Diagnóstico de Enforma**. Revisa la instalación, que Windows proteja la contraseña de las copias (DPAPI) y restaura la última copia en una carpeta temporal para comprobarla, sin tocar sus datos. Todo debe salir en **OK**. Más detalles en el *Manual de instalación y respaldo* (también en el menú Inicio).

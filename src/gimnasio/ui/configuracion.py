@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from gimnasio.formato import fecha_hora_local, pesos
 from gimnasio.servicios.auditoria import ACCIONES
 from gimnasio.servicios.claves import LONGITUD_MINIMA
-from gimnasio.servicios.configuracion import PARAMETROS
+from gimnasio.servicios.configuracion import LOGO_POR_DEFECTO, PARAMETROS
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
 from gimnasio.servicios.permisos import ROLES, UsuarioActual
@@ -101,7 +101,12 @@ class PestanaParametros(QWidget):
             else:
                 editor.setText(str(valor))
         logo = self._servicios.configuracion.ruta_logo()
-        self.etiqueta_logo.setText(logo.name if logo else "Sin logo")
+        if logo is None:
+            self.etiqueta_logo.setText("Sin logo")
+        elif logo.name == LOGO_POR_DEFECTO:
+            self.etiqueta_logo.setText("Logo de Enforma (viene con el programa)")
+        else:
+            self.etiqueta_logo.setText(logo.name)
         self.mensaje.clear()
 
     def valores_editados(self) -> dict:
