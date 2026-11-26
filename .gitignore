@@ -1,0 +1,31 @@
+# Entorno y cachés de Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Empaquetado
+build/
+dist/
+*.spec
+
+# Datos: nunca se suben bases de datos, backups ni fotos de clientes
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.enc
+*.zip
+datos/
+backups/
+fotos/
+logs/
+*.log
+
+# Editores y sistema
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
