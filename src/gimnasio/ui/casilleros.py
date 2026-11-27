@@ -640,6 +640,10 @@ class PestanaCasilleros(QWidget, _Exportador):
                 t.item(i, 7).setForeground(QColor(COLOR_VIGENCIA_CASILLERO[f.vigencia]))
             if f.sugerir_liberar:
                 t.item(i, 9).setForeground(QColor("#b3261e"))
+            if f.fuera_de_zona:
+                t.item(i, 1).setForeground(QColor("#b3261e"))
+                t.item(i, 1).setToolTip("Ocupado fuera de su zona: asígnele uno de su zona "
+                                        "con «Cambiar de casillero…».")
         t.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
         t.setSortingEnabled(True)
         self.estado_lista.setText(f"{len(self._filas)} casilleros en la lista")
