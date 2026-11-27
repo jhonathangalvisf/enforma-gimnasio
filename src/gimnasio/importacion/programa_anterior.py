@@ -9,7 +9,8 @@ Tablas que se usan (las demás se ignoran):
 - ENPAGO.DBF  pagos del año. Los valores no son reales (casi todos $1.000): solo se usa
               la fecha de fin de las mensualidades para no perder una vigencia más larga.
 - ENASIS.DBF  asistencias. Solo fecha y franja (M mañana, T tarde, N noche).
-- ENCASI.DBF  casilleros. SEX vacío = mixto; IDCLIE + FCHAINI/FCHAFIN = ocupado.
+- ENCASI.DBF  casilleros. Zona según la distribución del gimnasio (1 al 411);
+              fuera de ese rango, SEX vacío = mixto; IDCLIE + FCHAINI/FCHAFIN = ocupado.
 - ENHUES.DBF  invitados. IDHUES es el documento; VISITAS es un contador.
 
 Los datos de salud (enfermedades, fuma, etc.) y las medidas no se importan.
@@ -23,6 +24,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from gimnasio.importacion.dbf import ErrorDBF, TablaDBF, buscar_archivo, leer_dbf
+from gimnasio.servicios.zonas_casilleros import TOTAL_CASILLEROS_GIMNASIO, zona_del_gimnasio
 
 TABLA_CLIENTES = "ENCLIE.DBF"
 TABLA_PAGOS = "ENPAGO.DBF"
@@ -364,7 +366,10 @@ def _leer_casilleros(datos: DatosAntiguos, limite_fin: date, codigos: set[str]) 
             datos.problema(t, fila, numero, "Número de casillero repetido.", "Se usa el primero.")
             continue
         numeros.add(numero)
-        zona = _ZONAS.get(r["SEX"].strip().upper(), "mixto")
+        # La zona sale de la distribución del gimnasio; el dato SEX del programa anterior
+        # solo se usa para casilleros por fuera del 1 al 411.
+        zona = (zona_del_gimnasio(n) if n <= TOTAL_CASILLEROS_GIMNASIO
+                else _ZONAS.get(r["SEX"].strip().upper(), "mixto"))
         casillero = CasilleroAntiguo(fila, numero, zona, None, None, None)
         datos.casilleros.append(casillero)
         codigo = _codigo(r["IDCLIE"])

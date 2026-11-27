@@ -30,6 +30,9 @@ from faker import Faker  # noqa: E402
 from sqlalchemy import Engine, func, insert, select  # noqa: E402
 
 from gimnasio.config import ZONA_HORARIA, url_base_datos  # noqa: E402
+from gimnasio.servicios.zonas_casilleros import (  # noqa: E402
+    TOTAL_CASILLEROS_GIMNASIO, zona_del_gimnasio,
+)
 from gimnasio.db.engine import crear_motor  # noqa: E402
 from gimnasio.db.migraciones import actualizar_esquema  # noqa: E402
 from gimnasio.modelos.clientes import texto_busqueda  # noqa: E402
@@ -243,8 +246,8 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
 
     # --- Casilleros ---------------------------------------------------------
     casilleros = []
-    for n in range(1, 241):
-        zona = "hombres" if n <= 100 else "mujeres" if n <= 200 else "mixto"
+    for n in range(1, TOTAL_CASILLEROS_GIMNASIO + 1):  # la distribución real del gimnasio
+        zona = zona_del_gimnasio(n)
         estado = "mantenimiento" if n % 47 == 0 else "disponible"
         casilleros.append(dict(id=n, numero=f"{n:03d}", zona=zona, estado=estado))
 

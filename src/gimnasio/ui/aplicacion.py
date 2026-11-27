@@ -41,6 +41,8 @@ class Aplicacion:
     def iniciar(self) -> None:
         # Planes de ejemplo (inactivos, sin precio) solo si la base no tiene ninguno.
         self.servicios.planes.crear_planes_ejemplo()
+        # Casilleros del gimnasio (001 al 411 con su zona) solo si la base no tiene ninguno.
+        self.servicios.casilleros.crear_catalogo_gimnasio()
         if not self.servicios.usuarios.hay_usuarios():
             dialogo = DialogoPrimerAdministrador(self.servicios)
             if dialogo.exec() != QDialog.DialogCode.Accepted:
