@@ -138,10 +138,15 @@ class PestanaRegistros(QWidget):
         )
         self.eliminadas = QCheckBox("Ver eliminadas")
         self.boton_consultar = boton("Consultar", principal=True)
-        for texto, w in self._rango.widgets() + [
-                (None, self.resultado), (None, self.eliminadas), (None, self.boton_consultar)]:
+        for texto, w in self._rango.widgets():
             if texto:
                 fila.addWidget(QLabel(texto))
+            fila.addWidget(w)
+        fila.addStretch()
+        capa.addLayout(fila)
+        # Segunda fila: así los filtros caben en un portátil.
+        fila = QHBoxLayout()
+        for w in (self.resultado, self.eliminadas, self.boton_consultar):
             fila.addWidget(w)
         fila.addStretch()
         capa.addLayout(fila)

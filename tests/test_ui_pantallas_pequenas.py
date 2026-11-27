@@ -148,3 +148,72 @@ def test_pagar_mensualidad_con_plan_con_precio(qapp, servicios, admin, cliente):
     d.guardar()
     assert d.result() == 1 and d.resultado.pago.monto == 70_000
     d.close()
+
+
+def _anchos(pantalla):
+    """Para el mensaje de error: qué controles piden más ancho."""
+    return sorted(((w.minimumSizeHint().width(), type(w).__name__, w.objectName(),
+                    getattr(w, "text", lambda: "")() if hasattr(w, "text") else "")
+                   for w in pantalla.findChildren(QtWidgets.QWidget)
+                   if w.minimumSizeHint().width() > 150), reverse=True)[:15]
+
+
+def _destruir(ventana) -> None:
+    """Destruye ya las ventanas de la prueba: en Windows, si quedan vivas hasta que
+    Python se cierra, Qt puede fallar al destruirlas y el proceso termina con error."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    ventana.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def _escala_letra() -> float:
+    """En Windows sin pantalla (GitHub) la letra por defecto sale mucho más grande que
+    en un PC real; las medidas se escalan para comparar lo mismo: «Exportar a Excel» mide
+    92 px con la letra normal de 9 puntos."""
+    from PySide6.QtGui import QFontMetrics
+
+    ancho = QFontMetrics(QtWidgets.QApplication.font()).horizontalAdvance("Exportar a Excel")
+    return max(1.0, ancho / 92)
+
+
+def test_ningun_modulo_queda_cortado_en_un_portatil(qapp, servicios, admin):
+    """1366 × 768 con escalado al 125 %: cada módulo (y cada pestaña) cabe en el espacio
+    que deja el menú, sin barra horizontal; los botones del final se ven."""
+    escala = _escala_letra()
+    v = VentanaPrincipal(servicios, admin)
+    v.resize(round(1093 * escala), round(614 * escala))
+    v.show()
+    qapp.processEvents()
+    for clave in v.modulos_visibles():
+        v.ir_a(clave)
+        qapp.processEvents()
+        pantalla = v.pantallas.currentWidget()
+        area = v.pantallas.currentWidget().parentWidget().parentWidget()
+        assert isinstance(area, QtWidgets.QScrollArea)
+        visible = area.viewport().size()
+        assert pantalla.minimumSizeHint().width() <= (1093 - 210) * escala, (
+            clave, escala, pantalla.minimumSizeHint(), _anchos(pantalla))
+        # La pantalla ocupa exactamente lo visible: nada queda escondido a la derecha.
+        assert pantalla.width() == visible.width(), (clave, pantalla.size(), visible)
+        assert not area.horizontalScrollBar().isVisible(), clave
+    v._detener()
+    v.close()
+    _destruir(v)
+
+
+def test_area_crece_solo_si_la_pantalla_no_cabe(qapp):
+    from gimnasio.ui.comunes import AreaPantalla
+
+    pantalla = QtWidgets.QWidget()
+    pantalla.setMinimumSize(700, 500)
+    area = AreaPantalla(pantalla)
+    area.resize(400, 300)
+    area.show()
+    qapp.processEvents()
+    assert pantalla.width() >= 700 and pantalla.height() >= 500  # aparecen las barras
+    area.resize(1200, 900)
+    qapp.processEvents()
+    assert pantalla.size() == area.viewport().size()  # cabe: ocupa todo lo visible
+    area.close()
+    _destruir(area)

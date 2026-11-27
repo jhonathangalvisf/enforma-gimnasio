@@ -1,5 +1,14 @@
 # Progreso
 
+## Pantallas que quedaban cortadas y casillero a $1 ✅ (27/11/2026)
+
+### Qué se hizo
+- Configuración, Reportes y Copias de seguridad (y Casilleros, Pagos, Asistencia) quedaban cortadas abajo y a la derecha en un portátil. Causa: el área desplazable de cada módulo dejaba la pantalla mucho más ancha que lo visible (Reportes llegaba a 1.786 px) y los botones del final quedaban escondidos.
+- Nueva `AreaPantalla` (ui/comunes.py): la pantalla ocupa exactamente lo visible; solo si de verdad no cabe crece hasta su mínimo y aparecen las barras.
+- Filas de filtros y botones demasiado anchas partidas en dos: Casilleros (búsqueda / filtros / acciones del administrador), Auditoría, Pagos → Consultar pagos e Historial de asistencia. Todos los módulos caben en 1093 × 614 (1366 × 768 al 125 %).
+- Precio sugerido del casillero: por defecto $1 (como los planes). Migración `0011` cambia a $1 las bases que lo tenían guardado en $0; si el administrador puso otro precio, no se toca.
+- Pruebas: `test_precio_casillero.py` y dos pruebas nuevas en `test_ui_pantallas_pequenas.py`.
+
 ## Clientes solo con clave, también para el administrador ✅ (27/11/2026)
 - Pedido del dueño: «la pestaña de clientes tiene información confidencial, prefiero tenerla bajo uso con clave». Elegido: pedirla **cada vez que se entra**, igual que Pagos.
 - El módulo Clientes arranca con un candado para todos; pide usuario y clave de un administrador (`PARA_MODULO_CLIENTES`, vale 12 h o hasta salir) y al salir se bloquea, se olvida la autorización y se borra la lista. Mientras está bloqueado no se consulta nada (tampoco al ordenar ni con Ctrl+N / Ctrl+F).

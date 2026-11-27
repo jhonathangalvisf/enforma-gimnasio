@@ -537,9 +537,14 @@ class PestanaCasilleros(QWidget, _Exportador):
         self.situacion = _combo([("Todas las situaciones", None)]
                                 + [(t, s) for s, t in SITUACIONES.items()])
         self.boton_buscar = boton("Buscar", principal=True)
-        filtros.addWidget(self.buscar, 2)
-        for w in (self.estado, self.zona, self.sexo, self.situacion, self.boton_buscar):
+        filtros.addWidget(self.buscar, 1)
+        filtros.addWidget(self.boton_buscar)
+        capa.addLayout(filtros)
+        # Los filtros van en su propia fila para que todo quepa en un portátil.
+        filtros = QHBoxLayout()
+        for w in (self.estado, self.zona, self.sexo, self.situacion):
             filtros.addWidget(w)
+        filtros.addStretch()
         capa.addLayout(filtros)
 
         acciones = QHBoxLayout()
@@ -556,6 +561,10 @@ class PestanaCasilleros(QWidget, _Exportador):
         self.es_admin = actual.puede(Permiso.ADMINISTRAR_CATALOGOS)
         self.boton_nuevo = self.boton_varios = self.boton_editar = None
         self.boton_mantenimiento = self.boton_corregir = None
+        capa.addLayout(acciones)
+        # Los botones del administrador van en una segunda fila para que la pantalla
+        # quepa en un portátil.
+        acciones = QHBoxLayout()
         if self.es_admin:
             self.boton_nuevo = boton("Nuevo casillero…")
             self.boton_varios = boton("Crear varios…")
@@ -565,7 +574,8 @@ class PestanaCasilleros(QWidget, _Exportador):
             for b in (self.boton_nuevo, self.boton_varios, self.boton_editar,
                       self.boton_mantenimiento, self.boton_corregir):
                 acciones.addWidget(b)
-        capa.addLayout(acciones)
+            acciones.addStretch()
+            capa.addLayout(acciones)
 
         self.tabla = tabla(self.COLUMNAS)
         capa.addWidget(self.tabla, 1)

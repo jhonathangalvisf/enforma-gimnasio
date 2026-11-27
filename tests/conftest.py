@@ -14,25 +14,34 @@ from gimnasio.modelos import Casillero, Cliente, Usuario
 
 # Al terminar, Qt destruye sus ventanas mientras Python se cierra. En Windows eso
 # a veces falla después de que todas las pruebas pasaron, y el proceso termina con
-# código 1 (pasó en GitHub con «515 passed»). Por eso, en Windows, una vez impreso
-# el resumen se sale directamente con el resultado real de pytest.
-_resultado_pytest: int | None = None
-
-
-def pytest_sessionfinish(session, exitstatus):
-    global _resultado_pytest
-    _resultado_pytest = int(exitstatus)
-
-
-@pytest.hookimpl(trylast=True)
-def pytest_unconfigure(config):
+# código 1 (pasó en GitHub con «515 passed» y con «594 passed»). Por eso, en Windows,
+# apenas se imprime el resumen se sale directamente con el resultado real de pytest,
+# antes de que los complementos de pytest se cierren y Python empiece a destruir Qt.
+def _salir_con(resultado: int) -> None:
     import os
     import sys
 
-    if sys.platform == "win32" and _resultado_pytest is not None and "PySide6" in sys.modules:
+    if sys.platform == "win32" and "PySide6" in sys.modules:
         sys.stdout.flush()
         sys.stderr.flush()
-        os._exit(_resultado_pytest)
+        # TerminateProcess y no os._exit: os._exit todavía descarga las DLL de Qt, y esa
+        # descarga puede fallar y cambiar el código de salida a 1 (visto en GitHub con
+        # «594 passed» y resultado 0 de pytest).
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32")
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        kernel32.TerminateProcess(kernel32.GetCurrentProcess(), resultado)
+        os._exit(resultado)  # por si TerminateProcess no actuó
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_sessionfinish(session, exitstatus):
+    # Envuelve a los demás: lo de después del `yield` corre cuando ya se imprimió el resumen.
+    yield
+    _salir_con(int(session.exitstatus))
 
 
 @pytest.fixture(autouse=True)

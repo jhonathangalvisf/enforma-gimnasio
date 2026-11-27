@@ -161,18 +161,68 @@ class FiltroAjusteDialogos(QObject):
         return False
 
 
+class AreaPantalla(QScrollArea):
+    """Área desplazable que contiene una pantalla del menú.
+
+    La pantalla ocupa exactamente el espacio visible; solo si de verdad no cabe (su
+    tamaño mínimo es mayor que el espacio) crece hasta ese mínimo y aparecen las barras.
+    Se calcula a mano porque el ajuste automático de Qt (`setWidgetResizable`) a veces
+    deja la pantalla mucho más ancha de lo visible cuando hay textos que se parten en
+    varias líneas, y entonces lo de la derecha y lo de abajo queda cortado."""
+
+    def __init__(self, pantalla: QWidget) -> None:
+        super().__init__()
+        self.setWidgetResizable(False)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # el foco sigue en la pantalla
+        self.setWidget(pantalla)
+        self._ajustando = False
+        # Temporizador propio (y no QTimer.singleShot): se destruye junto con el área, así
+        # nunca llama a un área que ya se cerró.
+        self._pendiente = QTimer(self)
+        self._pendiente.setSingleShot(True)
+        self._pendiente.setInterval(0)
+        self._pendiente.timeout.connect(self.ajustar)
+        pantalla.installEventFilter(self)
+
+    def ajustar(self) -> None:
+        pantalla = self.widget()
+        if pantalla is None or self._ajustando:
+            return
+        self._ajustando = True
+        try:
+            for _ in range(3):  # al aparecer una barra el espacio visible cambia
+                visible = self.viewport().size()
+                minimo = pantalla.minimumSizeHint().expandedTo(pantalla.minimumSize())
+                ancho = max(visible.width(), minimo.width())
+                alto = max(visible.height(), minimo.height())
+                if (ancho, alto) == (pantalla.width(), pantalla.height()):
+                    break
+                pantalla.resize(ancho, alto)
+        finally:
+            self._ajustando = False
+
+    def resizeEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
+        super().resizeEvent(evento)
+        self.ajustar()
+
+    def showEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
+        super().showEvent(evento)
+        self.ajustar()
+
+    def eventFilter(self, objeto, evento) -> bool:  # noqa: N802 (nombre de Qt)
+        if objeto is self.widget() and evento.type() == QEvent.Type.LayoutRequest:
+            self._pendiente.start()
+        return False
+
+
 class PilaPantallas(QStackedWidget):
     """Las pantallas del menú, cada una dentro de un área con barras de desplazamiento:
     si una pantalla no cabe, aparecen las barras en lugar de quedar cortada.
     `currentWidget()` devuelve la pantalla, no el área que la contiene."""
 
     def agregar(self, pantalla: QWidget) -> int:
-        area = QScrollArea()
-        area.setWidgetResizable(True)
-        area.setFrameShape(QFrame.Shape.NoFrame)
-        area.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # el foco sigue en la pantalla
-        area.setWidget(pantalla)
-        return self.addWidget(area)
+        return self.addWidget(AreaPantalla(pantalla))
 
     def pantalla(self, indice: int) -> QWidget | None:
         w = self.widget(indice)
