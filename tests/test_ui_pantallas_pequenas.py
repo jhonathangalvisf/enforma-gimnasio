@@ -158,6 +158,15 @@ def _anchos(pantalla):
                    if w.minimumSizeHint().width() > 150), reverse=True)[:15]
 
 
+def _destruir(ventana) -> None:
+    """Destruye ya las ventanas de la prueba: en Windows, si quedan vivas hasta que
+    Python se cierra, Qt puede fallar al destruirlas y el proceso termina con error."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    ventana.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 def _escala_letra() -> float:
     """En Windows sin pantalla (GitHub) la letra por defecto sale mucho más grande que
     en un PC real; las medidas se escalan para comparar lo mismo: «Exportar a Excel» mide
@@ -190,6 +199,7 @@ def test_ningun_modulo_queda_cortado_en_un_portatil(qapp, servicios, admin):
         assert not area.horizontalScrollBar().isVisible(), clave
     v._detener()
     v.close()
+    _destruir(v)
 
 
 def test_area_crece_solo_si_la_pantalla_no_cabe(qapp):
@@ -206,3 +216,4 @@ def test_area_crece_solo_si_la_pantalla_no_cabe(qapp):
     qapp.processEvents()
     assert pantalla.size() == area.viewport().size()  # cabe: ocupa todo lo visible
     area.close()
+    _destruir(area)
