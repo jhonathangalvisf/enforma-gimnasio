@@ -55,8 +55,10 @@ PARAMETROS: tuple[Parametro, ...] = (
     Parametro("casillero_dias", "Días que cubre el pago del casillero", "entero", 30, 1, 366,
               ayuda="Propuesta al asignar o renovar un casillero; se puede cambiar en cada caso.",
               grupo="Casilleros"),
-    Parametro("casillero_precio", "Precio sugerido del casillero", "entero", 0, 0, 99_999_999,
-              ayuda="En pesos, sin decimales. 0 = sin precio sugerido.", grupo="Casilleros"),
+    # $1 como los planes: en el recibo importa qué se pagó (decisión del gimnasio).
+    Parametro("casillero_precio", "Precio sugerido del casillero", "entero", 1, 0, 99_999_999,
+              ayuda="En pesos, sin decimales. Por defecto $1, como los planes. "
+                    "0 = sin precio sugerido.", grupo="Casilleros"),
     Parametro("casillero_dias_liberar", "Sugerir liberar tras días vencido", "entero", 15, 1, 365,
               ayuda="Recepción y la lista de casilleros marcan «sugerido liberar» cuando el "
                     "casillero lleva más de estos días vencido. Nunca se libera solo.",

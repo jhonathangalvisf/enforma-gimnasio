@@ -502,6 +502,10 @@ class PestanaAuditoria(QWidget):
             filtros.addWidget(QLabel(texto))
             filtros.addWidget(w)
         filtros.addWidget(self.usuario)
+        filtros.addStretch()
+        capa.addLayout(filtros)
+        # Segunda fila: así los filtros caben en un portátil.
+        filtros = QHBoxLayout()
         filtros.addWidget(self.accion)
         filtros.addWidget(self.texto, 1)
         filtros.addWidget(self.boton_buscar)

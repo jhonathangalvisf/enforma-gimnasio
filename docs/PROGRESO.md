@@ -1,5 +1,14 @@
 # Progreso
 
+## Pantallas que quedaban cortadas y casillero a $1 ✅ (27/11/2026)
+
+### Qué se hizo
+- Configuración, Reportes y Copias de seguridad (y Casilleros, Pagos, Asistencia) quedaban cortadas abajo y a la derecha en un portátil. Causa: el área desplazable de cada módulo dejaba la pantalla mucho más ancha que lo visible (Reportes llegaba a 1.786 px) y los botones del final quedaban escondidos.
+- Nueva `AreaPantalla` (ui/comunes.py): la pantalla ocupa exactamente lo visible; solo si de verdad no cabe crece hasta su mínimo y aparecen las barras.
+- Filas de filtros y botones demasiado anchas partidas en dos: Casilleros (búsqueda / filtros / acciones del administrador), Auditoría, Pagos → Consultar pagos e Historial de asistencia. Todos los módulos caben en 1093 × 614 (1366 × 768 al 125 %).
+- Precio sugerido del casillero: por defecto $1 (como los planes). Migración `0011` cambia a $1 las bases que lo tenían guardado en $0; si el administrador puso otro precio, no se toca.
+- Pruebas: `test_precio_casillero.py` y dos pruebas nuevas en `test_ui_pantallas_pequenas.py`.
+
 ## Asistencia: registrar por código y todo por cliente ✅ (27/11/2026)
 
 ### Qué se hizo

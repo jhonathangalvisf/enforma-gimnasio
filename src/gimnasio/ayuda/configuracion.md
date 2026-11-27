@@ -25,7 +25,7 @@ Son los ajustes del sistema. Cambie los valores y pulse **Guardar cambios**; **D
 | Parámetro | Qué hace | Por defecto |
 |---|---|---|
 | Días que cubre el pago del casillero | Días que se proponen al asignar o renovar. Se puede cambiar en cada caso. | 30 |
-| Precio sugerido del casillero | Valor que se propone al cobrar. 0 = sin precio sugerido. | 0 |
+| Precio sugerido del casillero | Valor que se propone al cobrar. Por defecto $1, como los planes. 0 = sin precio sugerido. | 1 |
 | Sugerir liberar tras días vencido | Después de cuántos días vencido se marca "sugerido liberar". | 15 |
 
 ### Invitados

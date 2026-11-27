@@ -74,6 +74,10 @@ class PestanaConsultaPagos(QWidget):
             fila2.addWidget(QLabel(texto))
             fila2.addWidget(w)
         fila2.addWidget(self.todas_fechas)
+        fila2.addStretch()
+        capa.addLayout(fila2)
+        # Segunda fila de filtros: así caben en un portátil.
+        fila2 = QHBoxLayout()
         fila2.addWidget(self.campo_metodo)
         fila2.addWidget(self.campo_concepto)
         fila2.addWidget(self.boton_consultar)

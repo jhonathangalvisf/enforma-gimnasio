@@ -142,3 +142,41 @@ def test_pagar_mensualidad_con_plan_con_precio(qapp, servicios, admin, cliente):
     d.guardar()
     assert d.result() == 1 and d.resultado.pago.monto == 70_000
     d.close()
+
+
+def test_ningun_modulo_queda_cortado_en_un_portatil(qapp, servicios, admin):
+    """1366 × 768 con escalado al 125 %: cada módulo (y cada pestaña) cabe en el espacio
+    que deja el menú, sin barra horizontal; los botones del final se ven."""
+    v = VentanaPrincipal(servicios, admin)
+    v.resize(1093, 614)
+    v.show()
+    qapp.processEvents()
+    for clave in v.modulos_visibles():
+        v.ir_a(clave)
+        qapp.processEvents()
+        pantalla = v.pantallas.currentWidget()
+        area = v.pantallas.currentWidget().parentWidget().parentWidget()
+        assert isinstance(area, QtWidgets.QScrollArea)
+        visible = area.viewport().size()
+        assert pantalla.minimumSizeHint().width() <= 1093 - 210, (clave, pantalla.minimumSizeHint())
+        # La pantalla ocupa exactamente lo visible: nada queda escondido a la derecha.
+        assert pantalla.width() == visible.width(), (clave, pantalla.size(), visible)
+        assert not area.horizontalScrollBar().isVisible(), clave
+    v._detener()
+    v.close()
+
+
+def test_area_crece_solo_si_la_pantalla_no_cabe(qapp):
+    from gimnasio.ui.comunes import AreaPantalla
+
+    pantalla = QtWidgets.QWidget()
+    pantalla.setMinimumSize(700, 500)
+    area = AreaPantalla(pantalla)
+    area.resize(400, 300)
+    area.show()
+    qapp.processEvents()
+    assert pantalla.width() >= 700 and pantalla.height() >= 500  # aparecen las barras
+    area.resize(1200, 900)
+    qapp.processEvents()
+    assert pantalla.size() == area.viewport().size()  # cabe: ocupa todo lo visible
+    area.close()
