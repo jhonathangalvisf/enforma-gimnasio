@@ -12,12 +12,12 @@ from sqlalchemy import select
 from gimnasio.db.engine import crear_fabrica_sesiones
 from gimnasio.modelos import Auditoria, Cliente, Membresia, Pago
 from gimnasio.servicios.autorizaciones import (
-    PARA_INSCRIPCION, PARA_MODULO_PAGOS, PARA_PAGO, ErrorAutorizacion,
+    PARA_ACTIVACION, PARA_INSCRIPCION, PARA_MODULO_PAGOS, PARA_PAGO, ErrorAutorizacion,
 )
 from gimnasio.servicios.casilleros import CasilleroEnRecibo
 from gimnasio.servicios.errores import ErrorAutenticacion, ErrorPermiso, ErrorValidacion
 from gimnasio.servicios.pagos import DatosPago, FiltrosPagos
-from tests.conftest import CLAVE_PRUEBA
+from tests.conftest import CLAVE_PRUEBA, dejar_saldo_antiguo
 from tests.test_clientes import datos
 
 pytestmark = pytest.mark.clave_admin_real
@@ -107,8 +107,9 @@ def test_cada_cobro_gasta_su_clave(servicios, recepcion, plan, cliente, fabrica)
         servicios.pagos.registrar_membresia(recepcion, cliente, plan.id, autorizacion=aut,
                                             pago=DatosPago(120_000, "tarjeta"))
     r = servicios.pagos.registrar_membresia(recepcion, cliente, plan.id, autorizacion=aut,
-                                            pago=DatosPago(50_000))
-    # Ya se usó: el abono siguiente pide la clave otra vez.
+                                            pago=DatosPago(120_000))
+    dejar_saldo_antiguo(fabrica, r.pago.id, 110_000)  # saldo de antes de quitar los abonos
+    # Ya se usó: el pago siguiente pide la clave otra vez.
     with pytest.raises(ErrorAutorizacion):
         servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(10_000),
                                        membresia_id=r.id, autorizacion=aut)
@@ -332,3 +333,31 @@ def test_ficha_muestra_los_pagos_solo_con_clave(qapp, servicios, admin, recepcio
         f.cargar()  # tras registrar algo, sigue desbloqueada en esta ficha
         assert f._pila_pagos.currentWidget() is f._pestana_pagos_real
         f.close()
+
+
+def test_recepcion_activa_cliente_inactivo_con_clave_y_cobra_con_la_misma(
+    servicios, admin, recepcion, plan, cliente, fabrica
+):
+    servicios.clientes.inactivar(admin, cliente, "Retiro")
+    with pytest.raises(ErrorAutorizacion):
+        servicios.clientes.activar(recepcion, cliente)
+    with pytest.raises(ErrorAutorizacion):  # la clave de un pago no sirve para activar
+        servicios.clientes.activar(recepcion, cliente, clave(servicios, recepcion, PARA_PAGO))
+    aut = clave(servicios, recepcion, PARA_ACTIVACION)
+    servicios.clientes.activar(recepcion, cliente, aut)
+    assert servicios.clientes.obtener_ficha(admin, cliente).activo
+    # La misma clave sirve para cobrarle la mensualidad, y solo una vez.
+    servicios.pagos.registrar_membresia(recepcion, cliente, plan.id, autorizacion=aut,
+                                        pago=DatosPago(120_000))
+    with pytest.raises(ErrorAutorizacion):
+        servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(1_000), concepto="otro",
+                                       autorizacion=aut)
+    usos = auditorias(fabrica, "operacion_autorizada")
+    assert [u["operacion"] for u in usos] == ["activación", "membresía"]
+    assert auditorias(fabrica, "cliente_activado")[0]["codigo"]
+
+
+def test_admin_activa_sin_clave(servicios, admin, cliente):
+    servicios.clientes.inactivar(admin, cliente, "Retiro")
+    servicios.clientes.activar(admin, cliente)
+    assert servicios.clientes.obtener_ficha(admin, cliente).activo

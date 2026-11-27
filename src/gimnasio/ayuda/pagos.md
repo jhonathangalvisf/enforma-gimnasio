@@ -1,6 +1,6 @@
 # Pagos, membresías y caja
 
-Este tema explica cómo se venden y renuevan las membresías, cómo se registran los pagos y abonos, cómo se imprimen los recibos y cómo se hace el cierre de caja.
+Este tema explica cómo se venden y renuevan las membresías, cómo se registran los pagos (no hay abonos), cómo se imprimen los recibos y cómo se hace el cierre de caja.
 
 **Las membresías y los pagos se registran desde la ficha del cliente.** Búsquela con **Ctrl+K**. El módulo **Pagos** del menú muestra la caja del día.
 
@@ -8,7 +8,7 @@ Este tema explica cómo se venden y renuevan las membresías, cómo se registran
 
 Recepción solo puede cobrar con la **clave de un administrador**, y se pide **cada vez**:
 
-- Al **registrar cualquier pago**: mensualidad, abono, casillero u otro (desde la ficha, con **F2** en Recepción o desde Pagos).
+- Al **registrar cualquier pago**: mensualidad, saldo antiguo, casillero u otro (desde la ficha, con **F2** en Recepción o desde Pagos).
 - Al **inscribir un cliente nuevo**. La misma clave sirve para cobrar la mensualidad de esa inscripción (y el casillero, si lo pidió): no se pide dos veces.
 - Al **abrir el módulo Pagos**. Mientras la pantalla esté abierta se puede ver la caja y consultar; al salir del módulo se vuelve a bloquear.
 
@@ -33,13 +33,13 @@ Si quien trabaja es administrador, no se le pide nada.
 2. Pulse **Renovar membresía (Ctrl+R)**. Desde Recepción, con la tarjeta roja, también puede presionar **F2**.
 3. Ya viene elegido el último plan del cliente. Cámbielo si hace falta.
 4. Revise la fecha en que **inicia**. Debajo aparece hasta cuándo **vence**.
-5. En **Pago ahora** ponga el **monto**, el **método** (efectivo, tarjeta o transferencia) y la **referencia** (obligatoria con tarjeta o transferencia: el número de aprobación o de la transacción).
+5. En **Pago completo** el **monto** ya trae el valor total del plan y no se puede cambiar (no se reciben abonos). Elija el **método** (efectivo, tarjeta o transferencia) y la **referencia** (obligatoria con tarjeta o transferencia: el número de aprobación o de la transacción).
 6. Si el cliente también paga el **casillero**, marque **Pagar también el casillero (en el mismo recibo)**: si ya tiene uno, se renueva; si no, elija a mano uno libre de su zona. Ponga los días y el valor.
 7. Pulse **Registrar**. Si dejó marcada la casilla, se abre el recibo para imprimirlo.
 
 ### Mensualidad y casillero en un solo recibo
 
-Cuando se pagan juntos, sale **un solo recibo con un solo número** (por ejemplo R-000123) que trae los dos conceptos, cada uno con su valor, y el **total pagado**. Los dos usan el mismo método de pago. Para cobrar el casillero junto con la mensualidad hay que registrar pago de la mensualidad (no "sin pago").
+Cuando se pagan juntos, sale **un solo recibo con un solo número** (por ejemplo R-000123) que trae los dos conceptos, cada uno con su valor, y el **total pagado**. Los dos usan el mismo método de pago.
 
 ### Cuándo empieza la nueva membresía
 
@@ -48,13 +48,11 @@ Cuando se pagan juntos, sale **un solo recibo con un solo número** (por ejemplo
 - Recepción puede poner una fecha de inicio de hasta 30 días atrás; más atrás solo el administrador. Nunca más de 90 días adelante.
 - No se pueden vender membresías a clientes inactivos ni con planes desactivados.
 
-### Abonos (pago parcial)
+### Solo pagos completos (no hay abonos)
 
-Si el cliente no paga todo, escriba en el monto solo lo que pagó: la diferencia queda como **saldo pendiente**. También puede marcar **Registrar sin pago** para que todo quede como saldo.
+En el gimnasio solo se registran membresías **pagadas completas y por adelantado**. No se puede registrar una membresía sin pago ni cobrar una parte (abono): el sistema lo rechaza aunque se intente.
 
-Cuando traiga el resto, en la pestaña **Membresías** seleccione la membresía y pulse **Registrar abono…**. Ningún pago puede ser mayor que el saldo.
-
-Un cliente con saldo **puede entrar**: en Recepción la tarjeta sale amarilla con "SALDO PENDIENTE", y la ficha muestra el aviso arriba.
+Si un cliente quedó con **saldo pendiente de antes** (de cuando se recibían abonos), en Recepción la tarjeta sale amarilla con "SALDO PENDIENTE" y la ficha muestra el aviso arriba. Para cobrarlo, en la pestaña **Membresías** de la ficha pulse **Pagar saldo pendiente…**: se cobra el saldo completo de una vez. Ese botón solo aparece si hay saldo.
 
 ### Precio distinto o descuento (solo administrador)
 

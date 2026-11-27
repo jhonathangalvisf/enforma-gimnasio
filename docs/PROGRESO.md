@@ -9,6 +9,16 @@
 - Precio sugerido del casillero: por defecto $1 (como los planes). Migración `0011` cambia a $1 las bases que lo tenían guardado en $0; si el administrador puso otro precio, no se toca.
 - Pruebas: `test_precio_casillero.py` y dos pruebas nuevas en `test_ui_pantallas_pequenas.py`.
 
+## Recepción más sencilla y solo pagos completos ✅ (27/11/2026)
+Pedido del dueño (la usarán personas mayores): Recepción lo más directa posible.
+- **Sin lista lateral:** se quitó el historial de ingresos de hoy del lado derecho; la tarjeta ocupa todo el ancho. Queda solo "Hoy: N asistentes" arriba a la derecha. La lista está en Asistencia.
+- **Botones grandes para los atajos:** "Registrar (Enter)" y "Buscar por nombre o cédula (F6)" bajo el campo de código, "Pantalla completa (F11)" junto al título y "A− / A+" para la letra. Ningún botón toma el foco: el lector sigue escribiendo en el campo. Los botones de la tarjeta son más grandes y se acomodan sin huecos.
+- **Botón "Activar cliente (F5)"** junto a "Ingreso autorizado" y "Ver ficha", solo cuando la tarjeta dice CLIENTE INACTIVO (un cliente con membresía vencida sigue activo y usa Renovar). Recepción escribe la clave de un administrador (autorización nueva `activacion`, 2 usos / 20 min): activa al cliente y abre Renovar membresía con la misma clave; al guardar el pago el ingreso pasa a permitido. Si cancela el cobro, la autorización se revoca y el cliente queda activo. `ServicioClientes.activar` acepta la autorización (el admin sigue sin clave) y deja `operacion_autorizada` en la auditoría.
+- **Sin abonos (decisión del dueño):** solo se registran membresías pagadas completas y por adelantado. Se quitó "Registrar sin pago"; el monto queda fijo en el precio del plan (o el precio con descuento del admin). El servicio lo exige: `registrar_membresia` rechaza membresías sin pago o con pago distinto al precio, y el pago de un saldo antiguo debe ser por el saldo completo. "Registrar abono…" de la ficha pasó a "Pagar saldo pendiente…" y solo aparece si hay saldo de antes. El reporte de morosos y el aviso amarillo de saldo siguen para esos saldos antiguos.
+- `scripts/seed_datos.py` ya no crea abonos; la prueba de humo del .exe paga completo. Ayuda actualizada (Recepción, Pagos, Clientes, Usuarios, Reportes).
+- Pruebas: helper `dejar_saldo_antiguo` (simula saldos de antes) y casos nuevos de botones, activar y solo pago completo. Total: 548 pasan (6 omitidas fuera de Windows).
+- Capturas en `/mnt/project-files/recepcion_simple/`.
+
 ## Asistencia: registrar por código y todo por cliente ✅ (27/11/2026)
 
 ### Qué se hizo

@@ -70,7 +70,7 @@ def ejecutar(reporte: Path | None = None) -> int:
                 tipo_documento="CC", documento="99999999", nombres="Cliente", apellidos="De Prueba",
                 sexo="M", telefonos=["3000000000"]))
             membresia = s.pagos.registrar_membresia(
-                admin, ficha.id, plan.id, pago=DatosPago(monto=60_000))
+                admin, ficha.id, plan.id, pago=DatosPago(monto=100_000))
             estado["pago_id"] = membresia.pago.id
             estado["codigo"] = ficha.codigo
             return f"cliente {ficha.codigo}, saldo {membresia.saldo}"
@@ -130,7 +130,7 @@ def ejecutar(reporte: Path | None = None) -> int:
 
         for nombre, funcion in (
             ("Migraciones", migrar), ("Servicios y usuarios", servicios),
-            ("Cliente, membresía y abono", cliente_y_pago), ("Ingreso en Recepción", ingreso),
+            ("Cliente, membresía y pago", cliente_y_pago), ("Ingreso en Recepción", ingreso),
             ("Recibo PDF", recibo_pdf), ("Reportes Excel y PDF", reportes),
             ("Copia de seguridad cifrada", copia), ("Ayuda", ayuda),
             ("Interfaz Qt", interfaz), ("Diagnóstico y DPAPI", diagnostico),

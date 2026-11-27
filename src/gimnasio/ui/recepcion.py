@@ -1,12 +1,17 @@
-"""Pantalla de Recepción (sección 3.4): se usa solo con teclado.
+"""Pantalla de Recepción (sección 3.4): funciona solo con teclado y también con botones.
 
 El campo de código está siempre enfocado. Un lector USB escribe el código y presiona
 Enter. La tarjeta grande se pone verde, amarilla o roja (con sonido) y siempre lleva
-texto e ícono, no solo color.
+texto e ícono, no solo color. La tarjeta ocupa todo el ancho (sin lista lateral de
+ingresos: esa lista está en Asistencia).
+
+Cada atajo tiene además un botón grande (la usan personas mayores): ningún botón toma
+el foco, así el lector sigue escribiendo en el campo de código.
 
 Atajos: Enter registra · Enter vacío confirma un segundo ingreso del día · Esc cancela ·
-F2 Renovar ahora · F3 Ingreso autorizado · F4 Ver ficha · F6 Buscar por documento o
-nombre · F11 Pantalla completa · Ctrl + / Ctrl − / Ctrl 0 tamaño de letra.
+F2 Renovar ahora · F3 Ingreso autorizado · F4 Ver ficha · F5 Activar cliente (inactivo) ·
+F6 Buscar por documento o nombre · F11 Pantalla completa · Ctrl + / Ctrl − / Ctrl 0
+tamaño de letra.
 """
 
 from __future__ import annotations
@@ -18,20 +23,22 @@ from collections.abc import Callable
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
-    QVBoxLayout, QWidget,
+    QApplication, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+    QPushButton, QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha, fecha_hora_local
 from gimnasio.rutas import recurso
 from gimnasio.servicios.asistencia import (
-    AMARILLO, DUPLICADO_BLOQUEADO, DUPLICADO_CONFIRMAR, RECHAZADO, RESULTADOS, ROJO, VERDE,
+    AMARILLO, DUPLICADO_BLOQUEADO, DUPLICADO_CONFIRMAR, RECHAZADO, ROJO, VERDE,
     ResultadoIngreso, TarjetaIngreso,
 )
+from gimnasio.servicios.autorizaciones import PARA_ACTIVACION
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
-from gimnasio.ui.comunes import boton, celda, etiqueta, mostrar_error, tabla
+from gimnasio.ui.autorizacion import pedir_autorizacion
+from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
 from gimnasio.ui.dialogos import _DialogoBase, campo_clave
 
 RUTA_SONIDO = recurso("alerta.wav")
@@ -144,11 +151,18 @@ class TarjetaRecepcion(QFrame):
         datos.addStretch()
         # En cuadrícula de dos columnas: así la tarjeta cabe en pantallas angostas.
         self.botones = QGridLayout()
+        self.botones.setSpacing(10)
         self.boton_renovar = boton("Renovar ahora (F2)", principal=True)
         self.boton_autorizar = boton("Ingreso autorizado (F3)")
+        self.boton_activar = boton("Activar cliente (F5)", principal=True)
         self.boton_ficha = boton("Ver ficha (F4)")
-        for i, b in enumerate((self.boton_renovar, self.boton_autorizar, self.boton_ficha)):
+        self._orden_botones = (self.boton_renovar, self.boton_autorizar, self.boton_activar,
+                               self.boton_ficha)
+        for i, b in enumerate(self._orden_botones):
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # el foco no sale del campo de código
+            b.setObjectName("botonRecepcion")
+            # Se agregan todos desde el inicio para que queden dentro de la tarjeta (un
+            # botón sin padre se abriría como ventana aparte al mostrarlo).
             self.botones.addWidget(b, i // 2, i % 2)
         self.botones.setColumnStretch(2, 1)
         datos.addLayout(self.botones)
@@ -169,10 +183,19 @@ class TarjetaRecepcion(QFrame):
         self.mostrar_botones(False, False, False)
         self.aplicar_estilo()
 
-    def mostrar_botones(self, renovar: bool, autorizar: bool, ficha: bool) -> None:
-        self.boton_renovar.setVisible(renovar)
-        self.boton_autorizar.setVisible(autorizar)
-        self.boton_ficha.setVisible(ficha)
+    def mostrar_botones(self, renovar: bool, autorizar: bool, ficha: bool,
+                        activar: bool = False) -> None:
+        visibles = {self.boton_renovar: renovar, self.boton_autorizar: autorizar,
+                    self.boton_activar: activar, self.boton_ficha: ficha}
+        # Se acomodan solo los visibles, para que no queden huecos en la cuadrícula.
+        for b in self._orden_botones:
+            self.botones.removeWidget(b)
+        i = 0
+        for b in self._orden_botones:
+            b.setVisible(visibles[b])
+            if visibles[b]:
+                self.botones.addWidget(b, i // 2, i % 2)
+                i += 1
 
     def mostrar(self, t: TarjetaIngreso, aviso: str = "", color: str | None = None) -> None:
         self.color = color or t.color
@@ -235,6 +258,8 @@ class TarjetaRecepcion(QFrame):
             f"border-left: 5px solid {borde}; padding: 6px;"
         )
         self.aviso.setStyleSheet(f"font-size: {round(14 * e)}pt;")
+        for b in self._orden_botones:
+            b.setStyleSheet(f"font-size: {round(15 * e)}pt; padding: 12px 22px;")
 
 
 class PantallaRecepcion(QWidget):
@@ -255,15 +280,25 @@ class PantallaRecepcion(QWidget):
         capa = QVBoxLayout(self)
         capa.setContentsMargins(24, 16, 24, 16)
         capa.setSpacing(12)
+        # Botones grandes con lo mismo que hacen las teclas (más fácil que recordarlas).
+        self.boton_registrar = self._boton_accion("✔  Registrar (Enter)", principal=True)
+        self.boton_buscar = self._boton_accion("🔍  Buscar por nombre o cédula (F6)")
+        self.boton_pantalla = self._boton_accion("⛶  Pantalla completa (F11)")
+        self.boton_letra_menos = self._boton_accion("A−")
+        self.boton_letra_mas = self._boton_accion("A+")
+        self.boton_letra_menos.setToolTip("Letra más pequeña (Ctrl −)")
+        self.boton_letra_mas.setToolTip("Letra más grande (Ctrl +)")
+
         encabezado = QHBoxLayout()
+        encabezado.setSpacing(10)
         encabezado.addWidget(etiqueta("Recepción", "tituloPantalla"))
+        encabezado.addSpacing(12)
+        encabezado.addWidget(self.boton_pantalla)
         encabezado.addStretch()
-        self.ayuda = etiqueta(
-            "Enter registra · F2 Renovar · F3 Autorizar · F4 Ficha · F6 Buscar por nombre "
-            "o documento · F11 Pantalla completa · Ctrl + / Ctrl − letra", "textoSuave")
-        self.ayuda.setWordWrap(True)
-        self.ayuda.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        encabezado.addWidget(self.ayuda, 1)
+        # Solo el número de asistentes; la lista de ingresos del día está en Asistencia.
+        self.contador = etiqueta("")
+        self.contador.setObjectName("contadorAsistentes")
+        encabezado.addWidget(self.contador)
         capa.addLayout(encabezado)
 
         self.campo = QLineEdit()
@@ -273,39 +308,33 @@ class PantallaRecepcion(QWidget):
         self.campo.returnPressed.connect(self.procesar)
         capa.addWidget(self.campo)
 
-        cuerpo = QHBoxLayout()
-        cuerpo.setSpacing(16)
-        self.tarjeta = TarjetaRecepcion()
-        cuerpo.addWidget(self.tarjeta, 3)
-        lateral = QFrame()
-        lateral.setObjectName("tarjeta")
-        capa_lateral = QVBoxLayout(lateral)
-        capa_lateral.setContentsMargins(14, 12, 14, 12)
-        self.contador = etiqueta("")
-        self.contador.setObjectName("contadorAsistentes")
-        self.subcontador = etiqueta("", "textoSuave")
-        capa_lateral.addWidget(self.contador)
-        capa_lateral.addWidget(self.subcontador)
-        capa_lateral.addWidget(etiqueta("Últimos ingresos de hoy", "textoSuave"))
-        self.tabla = tabla(["Hora", "Código", "Cliente", "Resultado", "Casillero"])
-        self.tabla.setSortingEnabled(False)
-        cabecera = self.tabla.horizontalHeader()
-        cabecera.setStretchLastSection(False)
-        cabecera.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        capa_lateral.addWidget(self.tabla, 1)
-        # Ancho flexible: se angosta en pantallas pequeñas en vez de cortar la tarjeta.
-        lateral.setMinimumWidth(240)
-        lateral.setMaximumWidth(520)
-        cuerpo.addWidget(lateral, 2)
-        capa.addLayout(cuerpo, 1)
+        # Una sola fila bajo el campo, para que la tarjeta quede grande.
+        acciones = QHBoxLayout()
+        acciones.setSpacing(10)
+        acciones.addWidget(self.boton_registrar)
+        acciones.addWidget(self.boton_buscar)
+        acciones.addStretch()
+        acciones.addWidget(QLabel("Letra:"))
+        acciones.addWidget(self.boton_letra_menos)
+        acciones.addWidget(self.boton_letra_mas)
+        capa.addLayout(acciones)
+        self.boton_registrar.clicked.connect(self.procesar)
+        self.boton_buscar.clicked.connect(lambda: self.buscar_manual())
+        self.boton_pantalla.clicked.connect(self.pantalla_completa.emit)
+        self.boton_letra_menos.clicked.connect(lambda: self.cambiar_escala(-PASO_ESCALA))
+        self.boton_letra_mas.clicked.connect(lambda: self.cambiar_escala(PASO_ESCALA))
 
-        self.tarjeta.boton_renovar.clicked.connect(self.renovar)
+        self.tarjeta = TarjetaRecepcion()
+        capa.addWidget(self.tarjeta, 1)
+
+        self.tarjeta.boton_renovar.clicked.connect(lambda: self.renovar())
         self.tarjeta.boton_autorizar.clicked.connect(self.autorizar)
+        self.tarjeta.boton_activar.clicked.connect(self.activar)
         self.tarjeta.boton_ficha.clicked.connect(self.ver_ficha)
         contexto = Qt.ShortcutContext.WidgetWithChildrenShortcut
         for tecla, accion in (
             ("F2", self.renovar), ("F3", self.autorizar), ("F4", self.ver_ficha),
+            ("F5", self.activar),
             ("F6", self.buscar_manual), ("F11", self.pantalla_completa.emit),
             ("Esc", self.cancelar), ("Ctrl++", lambda: self.cambiar_escala(PASO_ESCALA)),
             ("Ctrl+=", lambda: self.cambiar_escala(PASO_ESCALA)),
@@ -320,6 +349,11 @@ class PantallaRecepcion(QWidget):
             escala = 1.0
         self._aplicar_escala(escala)
         self.actualizar_lista()
+
+    def _boton_accion(self, texto: str, principal: bool = False) -> QPushButton:
+        b = boton(texto, principal)
+        b.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # el foco no sale del campo de código
+        return b
 
     # --- foco y tamaño de letra ------------------------------------------------
     def enfocar(self) -> None:
@@ -347,6 +381,11 @@ class PantallaRecepcion(QWidget):
         self.contador.setStyleSheet(
             f"font-size: {round(20 * self.escala)}pt; font-weight: 700; color: #1f4e79;"
         )
+        for b in (self.boton_registrar, self.boton_buscar, self.boton_pantalla,
+                  self.boton_letra_menos, self.boton_letra_mas):
+            b.setStyleSheet(f"font-size: {round(14 * self.escala)}pt; padding: 10px 18px;")
+        self.boton_letra_menos.setEnabled(self.escala > ESCALA_MIN)
+        self.boton_letra_mas.setEnabled(self.escala < ESCALA_MAX)
         self.tarjeta.escala = self.escala
         self.tarjeta.aplicar_estilo()
 
@@ -392,7 +431,15 @@ class PantallaRecepcion(QWidget):
         self.pendiente = None
         if self.ultimo:
             self.tarjeta.mostrar(self.ultimo.tarjeta, "No se registró un nuevo ingreso.")
-            self.tarjeta.mostrar_botones(False, False, True)
+            self.tarjeta.mostrar_botones(False, False, True,
+                                         activar=self._puede_activar(self.ultimo.tarjeta))
+
+    def _puede_activar(self, t: TarjetaIngreso) -> bool:
+        """Activar se ofrece cuando el cliente está inactivo. El administrador lo hace
+        directo; Recepción, con la clave de un administrador."""
+        return (bool(t.cliente_id) and not t.activo
+                and (self._actual.puede(Permiso.ACTIVAR_CLIENTES)
+                     or self._actual.puede(Permiso.REGISTRAR_PAGOS)))
 
     def mostrar(self, r: ResultadoIngreso) -> None:
         self.ultimo = r
@@ -417,6 +464,7 @@ class PantallaRecepcion(QWidget):
             and self._actual.puede(Permiso.REGISTRAR_PAGOS),
             autorizar=rechazado,
             ficha=self._actual.puede(Permiso.VER_CLIENTES),
+            activar=self._puede_activar(t),
         )
         if rechazado or r.estado == DUPLICADO_BLOQUEADO:
             self.sonar()
@@ -429,19 +477,6 @@ class PantallaRecepcion(QWidget):
         except ErrorNegocio:
             return
         self.contador.setText(f"Hoy: {resumen.asistentes} asistentes")
-        self.subcontador.setText(
-            f"{resumen.ingresos} ingresos · {resumen.rechazados} rechazados"
-        )
-        self.tabla.setRowCount(len(resumen.ultimos))
-        for i, f in enumerate(resumen.ultimos):
-            for j, valor in enumerate((
-                fecha_hora_local(f.fecha_hora)[-5:], f.codigo, f.nombre,
-                RESULTADOS.get(f.resultado, f.resultado), f.casillero or "",
-            )):
-                item = celda(valor)
-                if not f.efectiva:
-                    item.setForeground(Qt.GlobalColor.darkRed)
-                self.tabla.setItem(i, j, item)
 
     # --- acciones de la tarjeta ---------------------------------------------------
     def _rechazo_actual(self) -> ResultadoIngreso | None:
@@ -449,9 +484,9 @@ class PantallaRecepcion(QWidget):
             return None
         return self.ultimo
 
-    def renovar(self) -> None:
+    def renovar(self, autorizacion=None) -> None:
         r = self.ultimo
-        if r is None or self.tarjeta.boton_renovar.isHidden():
+        if r is None or (self.tarjeta.boton_renovar.isHidden() and autorizacion is None):
             self._avisar("Primero digite o pase el código de un cliente activo; luego F2 "
                          "renueva su membresía.")
             return
@@ -459,7 +494,8 @@ class PantallaRecepcion(QWidget):
 
         try:
             dialogo = DialogoMembresia(self._servicios, self._actual, r.tarjeta.cliente_id,
-                                       r.tarjeta.nombre_completo, padre=self)
+                                       r.tarjeta.nombre_completo, padre=self,
+                                       autorizacion=autorizacion)
         except ErrorNegocio as e:
             mostrar_error(self, e)
             return
@@ -480,6 +516,34 @@ class PantallaRecepcion(QWidget):
         self.tarjeta.aviso.setText(texto)
         self.tarjeta.aviso.show()
         self.enfocar()
+
+    def activar(self) -> None:
+        """Activa al cliente inactivo de la tarjeta (con la clave de un administrador si
+        es Recepción) y abre enseguida el cobro de la mensualidad."""
+        r = self.ultimo
+        if r is None or self.tarjeta.boton_activar.isHidden():
+            return
+        ok, autorizacion = pedir_autorizacion(self, self._servicios, self._actual,
+                                              PARA_ACTIVACION)
+        if not ok:
+            self.enfocar()
+            return
+        try:
+            self._servicios.clientes.activar(self._actual, r.tarjeta.cliente_id, autorizacion)
+        except ErrorNegocio as e:
+            mostrar_error(self, e)
+            self.enfocar()
+            return
+        self.refrescar_tarjeta()
+        self.tarjeta.mostrar_botones(
+            renovar=self._actual.puede(Permiso.REGISTRAR_PAGOS), autorizar=False,
+            ficha=self._actual.puede(Permiso.VER_CLIENTES))
+        self._avisar("✔ Cliente activado. Ahora cobre la mensualidad.")
+        if self._actual.puede(Permiso.REGISTRAR_PAGOS):
+            # La misma clave sirve para este cobro (no se vuelve a pedir).
+            self.renovar(autorizacion)
+        # Si no se cobró, la clave no queda sirviendo para otra cosa.
+        self._servicios.autorizaciones.revocar(autorizacion)
 
     def autorizar(self) -> None:
         r = self._rechazo_actual()

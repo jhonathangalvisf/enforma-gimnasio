@@ -19,6 +19,7 @@ from gimnasio.servicios.errores import ErrorPermiso, ErrorValidacion
 from gimnasio.servicios.pagos import DatosPago
 from gimnasio.servicios.reportes import CATALOGO, DEFINICIONES, ParametrosReportes
 from gimnasio.ui.reportes import periodo
+from tests.conftest import dejar_saldo_antiguo
 
 HOY = date(2026, 11, 26)  # el reloj de prueba está en 26/11/2026 10:00 en Bogotá
 P = ParametrosReportes
@@ -37,11 +38,12 @@ def _cliente(servicios, admin, documento, nombres, telefono="", sexo="F"):
 
 
 @pytest.fixture
-def escenario(servicios, admin, recepcion):
+def escenario(servicios, admin, recepcion, motor):
     """Cuatro clientes registrados hoy:
 
     - A: mensual del 01/11 al 30/11 pagado en efectivo (vence en 4 días).
-    - B: mensual del 01/10 al 30/10 con abono de 50.000 por tarjeta (registró Recepción).
+    - B: mensual del 01/10 al 30/10 con 50.000 pagados por tarjeta (registró Recepción);
+      saldo de antes de quitar los abonos.
     - C: septiembre y octubre (la segunda es renovación), pagadas por transferencia.
     - D: sin membresía, inactivado por el admin.
     Además un pago "otro" de 10.000 anulado.
@@ -54,9 +56,10 @@ def escenario(servicios, admin, recepcion):
     d = _cliente(servicios, admin, "100004", "Diana")
     pagos.registrar_membresia(admin, a, mensual, fecha_inicio=date(2026, 11, 1),
                               pago=DatosPago(120_000))
-    memb_b = pagos.registrar_membresia(admin, b, mensual, fecha_inicio=date(2026, 10, 1))
-    pagos.registrar_pago(recepcion, b, DatosPago(50_000, "tarjeta", "VOUCHER-1"),
-                         membresia_id=memb_b.id)
+    memb_b = pagos.registrar_membresia(admin, b, mensual, fecha_inicio=date(2026, 10, 1),
+                                       pago=DatosPago(120_000, "tarjeta", "VOUCHER-1"))
+    dejar_saldo_antiguo(crear_fabrica_sesiones(motor), memb_b.pago.id, 50_000,
+                        recepcion.id)
     for inicio in (date(2026, 9, 1), date(2026, 10, 1)):
         pagos.registrar_membresia(admin, c, mensual, fecha_inicio=inicio,
                                   pago=DatosPago(120_000, "transferencia", "TRF-1"))
@@ -204,7 +207,8 @@ def test_detalles_de_nuevos_renovaciones_y_bajas(servicios, admin, escenario):
     detalle_d = next(f for f in bajas.filas if f[2] == "Diana Prueba")
     assert detalle_d[5] == "Se mudó de ciudad"
     # Si se renueva, B deja de ser baja.
-    servicios.pagos.registrar_membresia(admin, escenario["b"], escenario["mensual"])
+    servicios.pagos.registrar_membresia(admin, escenario["b"], escenario["mensual"],
+                                        pago=DatosPago(120_000))
     bajas = servicios.reportes.generar(admin, "clientes_bajas", rango)
     assert "Beatriz Prueba" not in _columna(bajas, "Cliente")
 

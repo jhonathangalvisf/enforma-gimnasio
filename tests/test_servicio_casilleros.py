@@ -344,7 +344,8 @@ def test_lista_de_vencidos_y_sugerencias(cas, servicios, recepcion, admin, ocupa
 def test_lista_de_membresia_vencida(cas, servicios, recepcion, admin, ocupados):
     _, pedro, _ = ocupados
     plan = servicios.planes.crear(admin, "Mensual", 30, 100_000)
-    servicios.pagos.registrar_membresia(admin, pedro.id, plan.id, fecha_inicio=HOY)
+    servicios.pagos.registrar_membresia(admin, pedro.id, plan.id, fecha_inicio=HOY,
+                                        pago=DatosPago(100_000))
     filas = cas.listar(recepcion, FiltrosCasilleros(situacion="membresia_vencida"))
     assert {f.numero for f in filas} == {"004", "M-1"}  # sin membresía; Pedro está vigente
 

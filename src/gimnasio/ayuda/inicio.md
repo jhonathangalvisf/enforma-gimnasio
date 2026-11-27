@@ -76,5 +76,5 @@ Si nadie toca el teclado ni el ratón durante un tiempo (15 minutos por defecto)
 ## Cómo usar esta ayuda
 
 - Elija un tema en la lista de la izquierda.
-- Escriba una palabra en el **buscador** (por ejemplo "abono" o "casillero vencido"): la lista muestra solo los temas que la contienen y la palabra aparece resaltada en el texto.
+- Escriba una palabra en el **buscador** (por ejemplo "saldo" o "casillero vencido"): la lista muestra solo los temas que la contienen y la palabra aparece resaltada en el texto.
 - En cualquier pantalla, presione **F1** para abrir directamente la ayuda de ese módulo.
