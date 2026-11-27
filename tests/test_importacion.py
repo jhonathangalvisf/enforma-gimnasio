@@ -170,8 +170,10 @@ def test_leer_carpeta_limpia_los_datos(db3):
     assert len(datos.asistencias) == 2
     assert [a.hora for a in datos.asistencias] == [7, 19]
     casilleros = {c.numero: c for c in datos.casilleros}
-    assert casilleros["001"].zona == "hombres" and casilleros["001"].codigo_cliente == "000003"
-    assert casilleros["003"].zona == "mixto" and casilleros["003"].codigo_cliente is None
+    # La zona sale de la distribución del gimnasio (1-49 mujeres), no del SEX antiguo;
+    # el hombre que ya tenía el 001 lo conserva (queda marcado fuera de su zona).
+    assert casilleros["001"].zona == "mujeres" and casilleros["001"].codigo_cliente == "000003"
+    assert casilleros["003"].zona == "mujeres" and casilleros["003"].codigo_cliente is None
     assert casilleros["004"].codigo_cliente is None  # el cliente ya tenía el 002
     assert [i.documento for i in datos.invitados] == ["1020304", "5556667"]
 

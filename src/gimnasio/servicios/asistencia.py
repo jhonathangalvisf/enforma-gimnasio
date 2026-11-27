@@ -476,6 +476,13 @@ class ServicioAsistencia:
             if dia != hoy and not actual.puede(Permiso.REPORTES_TODOS):
                 raise ErrorPermiso("Recepción solo puede ver el reporte de asistencia de hoy.")
             desde = hasta = dia
+        elif p.tipo == "cliente" and not actual.puede(Permiso.REPORTES_TODOS):
+            # Recepción ya puede consultar el historial de un cliente: también su reporte,
+            # pero siempre el historial completo.
+            exigir(actual, Permiso.REPORTES_BASICOS)
+            if p.desde:
+                raise ErrorPermiso("Recepción ve el reporte con todo el historial del cliente.")
+            desde = hasta = hoy
         else:
             exigir(actual, Permiso.REPORTES_TODOS)
             desde, hasta = p.desde or hoy, p.hasta or p.desde or hoy

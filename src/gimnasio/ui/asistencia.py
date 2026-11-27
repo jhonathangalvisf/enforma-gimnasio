@@ -1,29 +1,36 @@
-"""Módulo Asistencia (sección 3.5): consultas con filtros, eliminación lógica con motivo,
-reportes (del día, rango, cliente, franja horaria, ranking y ausentes) con exportación
-a Excel y PDF e impresión. Cada línea muestra el casillero que tenía el cliente."""
+"""Módulo Asistencia (sección 3.5), siempre de un cliente a la vez:
+
+- Registrar ingreso: por código, con la misma tarjeta de Recepción (verde, amarillo o
+  rojo) y el aviso de ingreso duplicado con confirmación.
+- Historial del cliente: sus ingresos, con eliminación lógica con motivo.
+- Reportes del cliente: exportación a Excel y PDF e impresión.
+
+Nada se carga solo al abrir la pantalla: las consultas y los reportes se hacen cuando el
+usuario los pide. Los reportes de todos los clientes (del día, rango, franja horaria,
+ranking y ausentes) están en el módulo Reportes."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QSpinBox, QTabWidget,
+    QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QTabWidget,
     QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha, fecha_hora_local
 from gimnasio.servicios.asistencia import (
-    LIMITE_CONSULTA, RESULTADOS, TIPOS_REPORTE, FiltrosAsistencia, ParametrosReporte, Reporte,
+    LIMITE_CONSULTA, RESULTADOS, FiltrosAsistencia, ParametrosReporte, Reporte,
 )
-from gimnasio.servicios.clientes import SEXOS
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
 from gimnasio.ui.comunes import boton, celda, etiqueta, mostrar_error, tabla
 from gimnasio.ui.pagos import abrir_archivo, campo_fecha, leer_fecha, pedir_motivo
+from gimnasio.ui.recepcion import PantallaRecepcion
 
 TODOS = "__todos__"  # resultado: ingresos y rechazos
 
@@ -48,91 +55,123 @@ def _combo(opciones: list[tuple[str, object]]) -> QComboBox:
     return c
 
 
-class _Filtros(QWidget):
-    """Sexo y plan, comunes a consultas y reportes."""
+class _RangoCliente:
+    """Código del cliente y periodo (todo el historial o desde/hasta), comunes al
+    historial y a los reportes. Recepción ve siempre todo el historial del cliente."""
+
+    def __init__(self, servicios: Servicios, actual: UsuarioActual, texto_codigo: str):
+        self._servicios, self._actual = servicios, actual
+        self.admin = actual.puede(Permiso.REPORTES_TODOS)
+        hoy = servicios.asistencia.hoy()
+        self.codigo = QLineEdit()
+        self.codigo.setPlaceholderText(texto_codigo)
+        self.codigo.setMaximumWidth(220)
+        self.todo = QCheckBox("Todo el historial")
+        self.todo.setChecked(True)
+        self.desde = campo_fecha(hoy - timedelta(days=30))
+        self.hasta = campo_fecha(hoy)
+        self.todo.toggled.connect(self._al_cambiar_todo)
+        if not self.admin:
+            self.todo.setEnabled(False)
+            self.todo.setToolTip("Recepción consulta todo el historial del cliente.")
+        self._al_cambiar_todo()
+
+    def _al_cambiar_todo(self) -> None:
+        for w in (self.desde, self.hasta):
+            w.setEnabled(not self.todo.isChecked())
+
+    def widgets(self) -> list[tuple[str | None, QWidget]]:
+        return [(None, self.codigo), (None, self.todo), ("Desde", self.desde),
+                ("Hasta", self.hasta)]
+
+    def cliente_id(self) -> int:
+        codigo = self.codigo.text().strip()
+        if not codigo:
+            raise ErrorValidacion("Escriba el código del cliente.")
+        return self._servicios.asistencia.buscar_codigo(self._actual, codigo)
+
+    def periodo(self) -> tuple[date | None, date | None]:
+        if self.todo.isChecked():
+            return None, None
+        return leer_fecha(self.desde), leer_fecha(self.hasta)
+
+
+class PestanaIngreso(PantallaRecepcion):
+    """Registro individual por código: la misma lógica y tarjeta de Recepción (semáforo,
+    aviso de duplicado con Enter/Esc, Renovar F2, Autorizar F3, Ficha F4, búsqueda por
+    documento o nombre F6), sin la lista de ingresos del día."""
 
     def __init__(self, servicios: Servicios, actual: UsuarioActual):
-        super().__init__()
-        self.sexo = _combo([("Todos los sexos", None)] + [(t, v) for v, t in SEXOS.items()])
-        self.plan = _combo([("Todos los planes", None)] + [
-            (nombre, pid) for pid, nombre in servicios.asistencia.planes(actual)
-        ])
+        super().__init__(servicios, actual)
+        self.layout().setContentsMargins(10, 10, 10, 10)
+        titulo = self.findChild(QLabel, "tituloPantalla")
+        if titulo is not None:
+            titulo.hide()
+        # Recepción ya no tiene listado lateral; aquí se ocultan además el contador y la
+        # pantalla completa. Quedan los botones grandes de Registrar, Buscar (F6) y letra.
+        self.contador.hide()
+        self.boton_pantalla.hide()
+        self.boton_manual = self.boton_buscar
+
+    def actualizar_lista(self) -> None:
+        """En Asistencia no se muestra el listado del día."""
 
 
 class PestanaRegistros(QWidget):
-    registrar_manual = Signal()
+    """Historial de un cliente: solo se consulta cuando el usuario lo pide."""
 
     def __init__(self, servicios: Servicios, actual: UsuarioActual):
         super().__init__()
         self._servicios, self._actual = servicios, actual
         self.pedir_motivo: Callable[[QWidget, str, str], str | None] = pedir_motivo
-        self._admin = actual.puede(Permiso.REPORTES_TODOS)
-        hoy = servicios.asistencia.hoy()
+        self._rango = _RangoCliente(servicios, actual, "Código del cliente")
+        self._admin = self._rango.admin
+        self.codigo, self.todo = self._rango.codigo, self._rango.todo
+        self.desde, self.hasta = self._rango.desde, self._rango.hasta
         capa = QVBoxLayout(self)
         capa.setContentsMargins(10, 10, 10, 10)
 
         fila = QHBoxLayout()
-        self.desde = campo_fecha(hoy)
-        self.hasta = campo_fecha(hoy)
-        self.codigo = QLineEdit()
-        self.codigo.setPlaceholderText("Código del cliente (opcional)")
-        self.codigo.setMaximumWidth(220)
         self.resultado = _combo(
             [("Solo ingresos", None), ("Ingresos y rechazos", TODOS)]
             + [(t, v) for v, t in RESULTADOS.items()]
         )
-        filtros = _Filtros(servicios, actual)
-        self.sexo, self.plan = filtros.sexo, filtros.plan
         self.eliminadas = QCheckBox("Ver eliminadas")
         self.boton_consultar = boton("Consultar", principal=True)
-        for texto, w in (("Desde", self.desde), ("Hasta", self.hasta), (None, self.codigo),
-                         (None, self.resultado), (None, self.sexo), (None, self.plan),
-                         (None, self.eliminadas), (None, self.boton_consultar)):
+        for texto, w in self._rango.widgets() + [
+                (None, self.resultado), (None, self.eliminadas), (None, self.boton_consultar)]:
             if texto:
                 fila.addWidget(QLabel(texto))
             fila.addWidget(w)
         fila.addStretch()
         capa.addLayout(fila)
         if not self._admin:
-            # Recepción: el día de hoy o el historial de un cliente.
-            for w in (self.desde, self.hasta):
-                w.setEnabled(False)
-                w.setToolTip("Recepción consulta el día de hoy o el historial de un cliente.")
             self.eliminadas.hide()
 
         self.tabla = tabla(["Fecha", "Hora", "Código", "Cliente", "Plan", "Resultado",
                             "Casillero", "Registró", "Estado"])
         capa.addWidget(self.tabla, 1)
         abajo = QHBoxLayout()
-        self.total = etiqueta("", "textoSuave")
+        self.total = etiqueta("Escriba el código del cliente y presione Consultar.",
+                              "textoSuave")
         abajo.addWidget(self.total, 1)
-        self.boton_manual = boton("Registrar ingreso manual (documento o nombre)…")
         self.boton_eliminar = boton("Eliminar registro…")
-        abajo.addWidget(self.boton_manual)
         abajo.addWidget(self.boton_eliminar)
         capa.addLayout(abajo)
 
         self.boton_consultar.clicked.connect(self.consultar)
         self.codigo.returnPressed.connect(self.consultar)
         self.boton_eliminar.clicked.connect(self.eliminar)
-        self.boton_manual.clicked.connect(self.registrar_manual.emit)
         self.filas = []
 
     def filtros(self) -> FiltrosAsistencia:
-        cliente_id = None
-        codigo = self.codigo.text().strip()
-        if codigo:
-            cliente_id = self._servicios.asistencia.buscar_codigo(self._actual, codigo)
+        cliente_id = self._rango.cliente_id()
+        desde, hasta = self._rango.periodo() if self._admin else (None, None)
         resultado = self.resultado.currentData()
-        desde, hasta = leer_fecha(self.desde), leer_fecha(self.hasta)
-        if not self._admin:
-            hoy = self._servicios.asistencia.hoy()
-            desde = hasta = None if cliente_id else hoy
         return FiltrosAsistencia(
             desde=desde, hasta=hasta, cliente_id=cliente_id,
             resultado=None if resultado in (None, TODOS) else resultado,
-            incluir_rechazos=resultado == TODOS, sexo=self.sexo.currentData(),
-            plan_id=self.plan.currentData(),
+            incluir_rechazos=resultado == TODOS,
             incluir_eliminadas=self._admin and self.eliminadas.isChecked(),
         )
 
@@ -188,6 +227,8 @@ class PestanaRegistros(QWidget):
 
 
 class PestanaReportes(QWidget):
+    """Reporte de asistencia de un cliente; se genera solo al presionar Generar."""
+
     def __init__(self, servicios: Servicios, actual: UsuarioActual):
         super().__init__()
         self._servicios, self._actual = servicios, actual
@@ -195,41 +236,24 @@ class PestanaReportes(QWidget):
         # Reemplazables en las pruebas.
         self.elegir_ruta: Callable[[str, str], str | None] = self._elegir_ruta
         self.abrir: Callable[[Path], None] = abrir_archivo
-        hoy = servicios.asistencia.hoy()
-        todos = actual.puede(Permiso.REPORTES_TODOS)
+        self._rango = _RangoCliente(servicios, actual, "Código del cliente")
+        self.codigo, self.todo = self._rango.codigo, self._rango.todo
+        self.desde, self.hasta = self._rango.desde, self._rango.hasta
         capa = QVBoxLayout(self)
         capa.setContentsMargins(10, 10, 10, 10)
 
         fila = QHBoxLayout()
-        self.tipo = _combo([(t, v) for v, t in TIPOS_REPORTE.items() if todos or v == "dia"])
-        self.desde = campo_fecha(hoy)
-        self.hasta = campo_fecha(hoy)
-        self.codigo = QLineEdit()
-        self.codigo.setPlaceholderText("Código del cliente")
-        self.codigo.setMaximumWidth(180)
-        self.dias = QSpinBox()
-        self.dias.setRange(1, 3650)
-        self.dias.setValue(30)
-        self.dias.setSuffix(" días")
-        self.limite = QSpinBox()
-        self.limite.setRange(1, 1000)
-        self.limite.setValue(50)
-        self.limite.setPrefix("Top ")
-        self.nunca = QCheckBox("Incluir los que nunca han venido")
-        filtros = _Filtros(servicios, actual)
-        self.sexo, self.plan = filtros.sexo, filtros.plan
         self.boton_generar = boton("Generar", principal=True)
-        self.etiqueta_desde, self.etiqueta_hasta = QLabel("Desde"), QLabel("Hasta")
-        for w in (self.tipo, self.etiqueta_desde, self.desde, self.etiqueta_hasta, self.hasta,
-                  self.codigo, self.dias, self.limite, self.nunca, self.sexo, self.plan,
-                  self.boton_generar):
+        for texto, w in self._rango.widgets() + [(None, self.boton_generar)]:
+            if texto:
+                fila.addWidget(QLabel(texto))
             fila.addWidget(w)
         fila.addStretch()
         capa.addLayout(fila)
-        if not todos:
-            self.desde.setEnabled(False)
 
-        self.subtitulo = etiqueta("", "textoSuave")
+        self.subtitulo = etiqueta(
+            "Escriba el código del cliente y presione Generar. Los reportes de todos los "
+            "clientes están en el módulo Reportes.", "textoSuave")
         capa.addWidget(self.subtitulo)
         self.tabla = tabla([""])
         capa.addWidget(self.tabla, 1)
@@ -242,41 +266,17 @@ class PestanaReportes(QWidget):
             abajo.addWidget(b)
         capa.addLayout(abajo)
 
-        self.tipo.currentIndexChanged.connect(self._al_cambiar_tipo)
         self.boton_generar.clicked.connect(self.generar)
+        self.codigo.returnPressed.connect(self.generar)
         self.boton_excel.clicked.connect(lambda: self.exportar("xlsx"))
         self.boton_pdf.clicked.connect(lambda: self.exportar("pdf"))
         self.boton_imprimir.clicked.connect(self.imprimir)
-        self._al_cambiar_tipo()
-
-    def _al_cambiar_tipo(self) -> None:
-        tipo = self.tipo.currentData()
-        rango = tipo in ("rango", "franja", "ranking", "cliente")
-        self.etiqueta_desde.setVisible(tipo != "ausentes")
-        self.desde.setVisible(tipo != "ausentes")
-        self.etiqueta_desde.setText("Día" if tipo == "dia" else "Desde")
-        self.etiqueta_hasta.setVisible(rango)
-        self.hasta.setVisible(rango)
-        self.codigo.setVisible(tipo == "cliente")
-        self.dias.setVisible(tipo == "ausentes")
-        self.nunca.setVisible(tipo == "ausentes")
-        self.limite.setVisible(tipo == "ranking")
-        self.plan.setVisible(tipo not in ("ausentes",))
 
     def parametros(self) -> ParametrosReporte:
-        tipo = self.tipo.currentData()
-        cliente_id = None
-        if tipo == "cliente":
-            codigo = self.codigo.text().strip()
-            if not codigo:
-                raise ErrorValidacion("Escriba el código del cliente.")
-            cliente_id = self._servicios.asistencia.buscar_codigo(self._actual, codigo)
-        return ParametrosReporte(
-            tipo=tipo, desde=leer_fecha(self.desde), hasta=leer_fecha(self.hasta),
-            cliente_id=cliente_id, dias=self.dias.value(), limite=self.limite.value(),
-            incluir_nunca=self.nunca.isChecked(), sexo=self.sexo.currentData(),
-            plan_id=self.plan.currentData(),
-        )
+        cliente_id = self._rango.cliente_id()
+        desde, hasta = self._rango.periodo()
+        return ParametrosReporte(tipo="cliente", desde=desde, hasta=hasta,
+                                 cliente_id=cliente_id)
 
     def generar(self) -> Reporte | None:
         try:
@@ -306,8 +306,8 @@ class PestanaReportes(QWidget):
         return ruta or None
 
     def _nombre(self, formato: str) -> str:
-        tipo = self.tipo.currentData()
-        return f"asistencia_{tipo}_{leer_fecha(self.desde):%Y%m%d}.{formato}"
+        codigo = "".join(c for c in self.codigo.text().strip() if c.isalnum()) or "cliente"
+        return f"asistencia_{codigo}_{self._servicios.asistencia.hoy():%Y%m%d}.{formato}"
 
     def exportar(self, formato: str) -> Path | None:
         filtro = "Excel (*.xlsx)" if formato == "xlsx" else "PDF (*.pdf)"
@@ -348,7 +348,7 @@ class PestanaReportes(QWidget):
 
 
 class PantallaAsistencia(QWidget):
-    registrar_manual = Signal()
+    abrir_ficha = Signal(int)
 
     def __init__(self, servicios: Servicios, actual: UsuarioActual):
         super().__init__()
@@ -356,19 +356,15 @@ class PantallaAsistencia(QWidget):
         capa.setContentsMargins(24, 20, 24, 20)
         capa.addWidget(etiqueta("Asistencia", "tituloPantalla"))
         capa.addWidget(etiqueta(
-            "Consulta, elimina (con motivo) y genera reportes de asistencia. Los intentos "
-            "rechazados y los registros eliminados no cuentan en los reportes.", "textoSuave"))
+            "Registra el ingreso de un cliente por su código y consulta su historial o su "
+            "reporte. Nada se carga hasta que usted lo pide. Los reportes de todos los "
+            "clientes están en el módulo Reportes.", "textoSuave"))
         self.pestanas = QTabWidget()
+        self.ingreso = PestanaIngreso(servicios, actual)
         self.registros = PestanaRegistros(servicios, actual)
         self.reportes = PestanaReportes(servicios, actual)
-        self.pestanas.addTab(self.registros, "Registros")
-        self.pestanas.addTab(self.reportes, "Reportes")
+        self.pestanas.addTab(self.ingreso, "Registrar ingreso")
+        self.pestanas.addTab(self.registros, "Historial del cliente")
+        self.pestanas.addTab(self.reportes, "Reportes del cliente")
         capa.addWidget(self.pestanas, 1)
-        self.registros.registrar_manual.connect(self.registrar_manual.emit)
-
-    def actualizar(self) -> None:
-        self.registros.consultar()
-
-    def showEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
-        super().showEvent(evento)
-        self.registros.consultar()
+        self.ingreso.abrir_ficha.connect(self.abrir_ficha.emit)
