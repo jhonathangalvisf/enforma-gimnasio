@@ -1,5 +1,9 @@
 """Pantalla de Clientes: búsqueda instantánea, filtros, tabla por páginas y exportación.
 
+Los datos de los clientes son confidenciales: el módulo está bloqueado para todos
+(también para el administrador) y cada vez que se entra un administrador escribe su
+usuario y clave. Al salir del módulo se vuelve a bloquear y la lista se borra.
+
 La tabla no carga los 12.000 clientes de una vez: pide páginas de 200 a medida que
 el usuario baja (carga virtual) y el orden se hace en la base de datos.
 """
@@ -21,6 +25,7 @@ from gimnasio.formato import fecha, leer_fecha
 from gimnasio.servicios.clientes import (
     ESTADOS, NOMBRES_VIGENCIA, SEXOS, FilaCliente, FiltrosClientes, Vigencia,
 )
+from gimnasio.servicios.autorizaciones import PARA_MODULO_CLIENTES, Autorizacion
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio, ErrorValidacion
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
@@ -73,14 +78,24 @@ class ModeloClientes(QAbstractTableModel):
         self.filtros = FiltrosClientes()
         self.orden = "apellidos"
         self.descendente = False
+        self.autorizacion: Autorizacion | None = None  # la del módulo bloqueado
+        self.habilitado = False  # mientras el módulo esté bloqueado no se consulta nada
+
+    def vaciar(self) -> None:
+        self.beginResetModel()
+        self.filas = []
+        self.total = 0
+        self.endResetModel()
 
     # --- consultas ------------------------------------------------------------
     def consultar(self, filtros: FiltrosClientes | None = None) -> None:
         if filtros is not None:
             self.filtros = filtros
+        if not self.habilitado:
+            return
         pagina = self._servicios.clientes.buscar(
             self._actual, self.filtros, orden=self.orden, descendente=self.descendente,
-            desde=0, limite=TAMANO_PAGINA,
+            desde=0, limite=TAMANO_PAGINA, autorizacion=self.autorizacion,
         )
         self.beginResetModel()
         self.filas = list(pagina.filas)
@@ -91,11 +106,11 @@ class ModeloClientes(QAbstractTableModel):
         return not padre.isValid() and len(self.filas) < self.total
 
     def fetchMore(self, padre=QModelIndex()) -> None:  # noqa: N802
-        if padre.isValid() or len(self.filas) >= self.total:
+        if padre.isValid() or len(self.filas) >= self.total or not self.habilitado:
             return
         pagina = self._servicios.clientes.buscar(
             self._actual, self.filtros, orden=self.orden, descendente=self.descendente,
-            desde=len(self.filas), limite=TAMANO_PAGINA,
+            desde=len(self.filas), limite=TAMANO_PAGINA, autorizacion=self.autorizacion,
         )
         if not pagina.filas:
             self.total = len(self.filas)
@@ -161,12 +176,35 @@ class PantallaClientes(QWidget):
         self._actual = actual
         # Las pruebas reemplazan cómo se muestran los diálogos (exec bloquea).
         self._ejecutar: Callable[[QDialog], int] = lambda d: d.exec()
-        capa = QVBoxLayout(self)
-        capa.setContentsMargins(24, 20, 24, 20)
+        self.autorizacion: Autorizacion | None = None
+        self.desbloqueado = False
+        exterior = QVBoxLayout(self)
+        exterior.setContentsMargins(24, 20, 24, 20)
+        exterior.setSpacing(10)
+        exterior.addWidget(etiqueta("Clientes", "tituloPantalla"))
+
+        # Candado: lo único que se ve hasta escribir la clave.
+        self.panel_bloqueado = QWidget()
+        bloqueo = QVBoxLayout(self.panel_bloqueado)
+        bloqueo.addStretch()
+        bloqueo.addWidget(etiqueta(
+            "🔒 El módulo de Clientes necesita la clave de un administrador cada vez que "
+            "se abre.", "textoSuave"), 0, Qt.AlignmentFlag.AlignCenter)
+        self.boton_desbloquear = boton("Desbloquear con clave de administrador…",
+                                       principal=True)
+        self.boton_desbloquear.clicked.connect(self.desbloquear)
+        bloqueo.addWidget(self.boton_desbloquear, 0, Qt.AlignmentFlag.AlignCenter)
+        bloqueo.addStretch()
+        exterior.addWidget(self.panel_bloqueado, 1)
+
+        self.contenido = QWidget()
+        exterior.addWidget(self.contenido, 1)
+        capa = QVBoxLayout(self.contenido)
+        capa.setContentsMargins(0, 0, 0, 0)
         capa.setSpacing(10)
 
         cabecera = QHBoxLayout()
-        cabecera.addWidget(etiqueta("Clientes", "tituloPantalla"), 1)
+        cabecera.addStretch(1)
         self.boton_nuevo = boton("Nuevo cliente  (Ctrl+N)", principal=True)
         self.boton_ficha = boton("Ver ficha")
         cabecera.addWidget(self.boton_ficha)
@@ -224,9 +262,44 @@ class PantallaClientes(QWidget):
         self.tabla.customContextMenuRequested.connect(self._menu_contextual)
         self.boton_ficha.clicked.connect(self.ver_ficha)
         self.boton_nuevo.clicked.connect(self.nuevo)
-        QShortcut(QKeySequence("Ctrl+N"), self, activated=self.nuevo)
-        QShortcut(QKeySequence("Ctrl+F"), self, activated=self.enfocar_busqueda)
+        QShortcut(QKeySequence("Ctrl+N"), self, activated=self._si_desbloqueado(self.nuevo))
+        QShortcut(QKeySequence("Ctrl+F"), self,
+                  activated=self._si_desbloqueado(self.enfocar_busqueda))
+        self.contenido.hide()
+
+    def _si_desbloqueado(self, accion: Callable[[], None]) -> Callable[[], None]:
+        return lambda: accion() if self.desbloqueado else None
+
+    # --- bloqueo con clave ---------------------------------------------------------
+    def desbloquear(self) -> bool:
+        if self.desbloqueado:
+            return True
+        from gimnasio.ui.autorizacion import pedir_clave_siempre
+
+        ok, autorizacion = pedir_clave_siempre(self, self._servicios, self._actual,
+                                               PARA_MODULO_CLIENTES)
+        if not ok:
+            return False
+        self.autorizacion = self.modelo.autorizacion = autorizacion
+        self.desbloqueado = self.modelo.habilitado = True
+        self.panel_bloqueado.hide()
+        self.contenido.show()
         self.recargar()
+        self.enfocar_busqueda()
+        return True
+
+    def bloquear(self) -> None:
+        """Al salir del módulo se olvida la autorización, se borra la lista y se bloquea."""
+        self._servicios.autorizaciones.revocar(self.autorizacion)
+        self.autorizacion = self.modelo.autorizacion = None
+        self.desbloqueado = self.modelo.habilitado = False
+        self.contenido.hide()
+        self.panel_bloqueado.show()
+        self.modelo.vaciar()
+        self.resumen = None
+        for b in self.botones_resumen.values():
+            b.setText("")
+        self.mensaje.setText("")
 
     def _crear_filtros(self) -> QVBoxLayout:
         filas = QVBoxLayout()
@@ -331,8 +404,10 @@ class PantallaClientes(QWidget):
         return fila
 
     def refrescar_resumen(self) -> None:
+        if not self.desbloqueado:
+            return
         try:
-            r = self._servicios.clientes.resumen(self._actual)
+            r = self._servicios.clientes.resumen(self._actual, self.autorizacion)
         except ErrorNegocio:
             return
         self.resumen = r
@@ -370,12 +445,22 @@ class PantallaClientes(QWidget):
         self.actualizar()
 
     def showEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
-        # Recepción o Pagos pudieron cambiar vigencias mientras la pantalla estaba oculta.
-        self.refrescar_resumen()
         super().showEvent(evento)
+        if self.desbloqueado:
+            # Recepción o Pagos pudieron cambiar vigencias mientras estaba oculta.
+            self.refrescar_resumen()
+        else:
+            # Primero se ve el candado y enseguida se pide la clave.
+            QTimer.singleShot(0, self.desbloquear)
+
+    def hideEvent(self, evento) -> None:  # noqa: N802 (nombre de Qt)
+        super().hideEvent(evento)
+        self.bloquear()
 
     def actualizar(self) -> None:
         self._espera.stop()
+        if not self.desbloqueado:
+            return
         try:
             filtros = self.filtros()
         except (ValueError, ErrorNegocio) as e:

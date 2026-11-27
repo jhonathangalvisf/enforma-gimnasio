@@ -346,6 +346,8 @@ class VentanaPrincipal(QMainWindow):
         texto = self.busqueda.text().strip()
         if not texto:
             return None
+        if not self.clave_para_buscar():
+            return None
         try:
             filas = self._servicios.clientes.buscar_rapido(self.actual, texto)
         except ErrorNegocio as e:
@@ -363,6 +365,22 @@ class VentanaPrincipal(QMainWindow):
         self.busqueda.clear()
         self.abrir_ficha(cliente_id)
         return cliente_id
+
+    def clave_para_buscar(self) -> bool:
+        """La búsqueda de la barra superior muestra datos de clientes desde cualquier
+        pantalla: pide la clave de un administrador cada vez, como el módulo Clientes
+        (salvo si ya se está dentro de Clientes con la clave puesta)."""
+        from gimnasio.servicios.autorizaciones import PARA_MODULO_CLIENTES
+        from gimnasio.ui.autorizacion import pedir_clave_siempre
+
+        if (self.modulo_actual() == "clientes" and self.pantalla_clientes is not None
+                and self.pantalla_clientes.desbloqueado):
+            return True
+        ok, autorizacion = pedir_clave_siempre(self, self._servicios, self.actual,
+                                               PARA_MODULO_CLIENTES)
+        # Solo sirve para esta búsqueda.
+        self._servicios.autorizaciones.revocar(autorizacion)
+        return ok
 
     def abrir_ficha(self, cliente_id: int) -> None:
         try:

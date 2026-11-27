@@ -17,7 +17,8 @@ Aplicación de escritorio para Windows, de un solo puesto (1 PC), sin nube, para
 | Acción | Recepción | Administrador |
 |---|:-:|:-:|
 | Iniciar sesión, registrar asistencia (módulo Recepción) | ✔ | ✔ |
-| Consultar clientes | ✔ | ✔ |
+| Consultar clientes en Recepción (su ficha con F4, búsqueda manual) | ✔ | ✔ |
+| Módulo Clientes (lista, contadores) y búsqueda Ctrl+K de la barra superior | Con clave de administrador, cada vez que se abre | Con su clave, cada vez que se abre (datos confidenciales) |
 | Inscribir clientes nuevos | Con clave de administrador, cada vez | ✔ |
 | Modificar clientes | ✔ (datos de contacto) | ✔ (todo) |
 | Activar / inactivar clientes | ✖ | ✔ |
