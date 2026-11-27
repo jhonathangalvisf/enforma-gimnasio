@@ -57,7 +57,7 @@ Solo el administrador puede cambiar el **precio** del plan en una venta. Cuando 
 
 ## Otros pagos
 
-En la pestaña **Pagos** de la ficha, **Registrar otro pago…** sirve para cobros que no son membresía ni casillero (concepto "Otro").
+En la pestaña **Pagos** de la ficha, **Pagar mensualidad…** abre la renovación de la membresía (la vigencia se actualiza y sale en el recibo). **Otro concepto (no es mensualidad)…** sirve solo para cobros que no son membresía ni casillero (concepto "Otro"): **no cambia la vigencia**, y su recibo dice hasta qué día está al día el cliente.
 
 ### Pagar solo el casillero
 
@@ -65,7 +65,7 @@ En la pantalla **Pagos**, pulse **Pagar casillero…** y escriba el código, doc
 
 ## Recibos
 
-Cada recibo tiene un **número consecutivo** (por ejemplo R-000123) que nunca se repite. Un recibo puede tener dos conceptos cuando la mensualidad y el casillero se pagan juntos; si después se anula uno de los dos, el recibo lo muestra como ANULADO y el total solo cuenta el otro. El recibo trae el logo y los datos del gimnasio, el cliente, el concepto, las fechas, el método, el valor, el saldo que quedó y quién atendió.
+Cada recibo tiene un **número consecutivo** (por ejemplo R-000123) que nunca se repite. Un recibo puede tener dos conceptos cuando la mensualidad y el casillero se pagan juntos; si después se anula uno de los dos, el recibo lo muestra como ANULADO y el total solo cuenta el otro. El recibo mide **10 cm de alto** (ancho de media carta) y trae el logo y los datos del gimnasio (NIT, dirección, teléfono), el cliente, el concepto, las fechas, el método, el valor, el saldo que quedó y quién atendió.
 
 Para verlo o reimprimirlo, seleccione el pago y pulse **Ver / imprimir recibo** (en la ficha o en la pantalla Pagos). Se abre en el visor de PDF del computador, desde donde se imprime. Los recibos se guardan en la carpeta de datos del programa.
 
