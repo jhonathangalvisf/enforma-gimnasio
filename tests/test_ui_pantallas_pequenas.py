@@ -152,11 +152,22 @@ def _anchos(pantalla):
                    if w.minimumSizeHint().width() > 150), reverse=True)[:15]
 
 
+def _escala_letra() -> float:
+    """En Windows sin pantalla (GitHub) la letra por defecto sale mucho más grande que
+    en un PC real; las medidas se escalan para comparar lo mismo: «Exportar a Excel» mide
+    92 px con la letra normal de 9 puntos."""
+    from PySide6.QtGui import QFontMetrics
+
+    ancho = QFontMetrics(QtWidgets.QApplication.font()).horizontalAdvance("Exportar a Excel")
+    return max(1.0, ancho / 92)
+
+
 def test_ningun_modulo_queda_cortado_en_un_portatil(qapp, servicios, admin):
     """1366 × 768 con escalado al 125 %: cada módulo (y cada pestaña) cabe en el espacio
     que deja el menú, sin barra horizontal; los botones del final se ven."""
+    escala = _escala_letra()
     v = VentanaPrincipal(servicios, admin)
-    v.resize(1093, 614)
+    v.resize(round(1093 * escala), round(614 * escala))
     v.show()
     qapp.processEvents()
     for clave in v.modulos_visibles():
@@ -166,8 +177,8 @@ def test_ningun_modulo_queda_cortado_en_un_portatil(qapp, servicios, admin):
         area = v.pantallas.currentWidget().parentWidget().parentWidget()
         assert isinstance(area, QtWidgets.QScrollArea)
         visible = area.viewport().size()
-        assert pantalla.minimumSizeHint().width() <= 1093 - 210, (
-            clave, pantalla.minimumSizeHint(), _anchos(pantalla))
+        assert pantalla.minimumSizeHint().width() <= (1093 - 210) * escala, (
+            clave, escala, pantalla.minimumSizeHint(), _anchos(pantalla))
         # La pantalla ocupa exactamente lo visible: nada queda escondido a la derecha.
         assert pantalla.width() == visible.width(), (clave, pantalla.size(), visible)
         assert not area.horizontalScrollBar().isVisible(), clave
