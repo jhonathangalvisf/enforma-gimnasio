@@ -1,6 +1,6 @@
 """Autorización de un administrador para que Recepción cobre o inscriba.
 
-Regla del dueño: el módulo Pagos, registrar cualquier pago (mensualidad, abono,
+Regla del dueño: el módulo Pagos, registrar cualquier pago (mensualidad, saldo antiguo,
 casillero u otro) e inscribir un cliente nuevo necesitan la contraseña de un
 administrador **cada vez**. Si quien trabaja es administrador no se le pide nada.
 
@@ -12,6 +12,8 @@ Cómo funciona:
    memoria del programa, vence pronto y se puede usar un número limitado de veces:
    - "pago": un cobro.
    - "inscripcion": inscribir al cliente y su primer cobro (2 usos).
+   - "activacion": activar a un cliente inactivo desde Recepción y cobrarle la
+     mensualidad (2 usos).
    - "modulo_pagos": ver la caja y consultar pagos mientras la pantalla esté abierta.
 3. También el módulo Clientes (datos confidenciales) pide la clave cada vez que se entra,
    al administrador incluido ("modulo_clientes": la lista y los contadores mientras la
@@ -42,11 +44,13 @@ PARA_MODULO_CLIENTES = "modulo_clientes"
 PARA_PAGO = "pago"
 PARA_INSCRIPCION = "inscripcion"
 PARA_MODULO_PAGOS = "modulo_pagos"
+PARA_ACTIVACION = "activacion"
 DESCRIPCIONES = {
     PARA_MODULO_CLIENTES: "abrir el módulo de Clientes",
     PARA_PAGO: "registrar un pago",
     PARA_INSCRIPCION: "inscribir un cliente nuevo",
     PARA_MODULO_PAGOS: "abrir el módulo de Pagos",
+    PARA_ACTIVACION: "activar un cliente inactivo y cobrarle la mensualidad",
 }
 # (duración, usos; None = sin límite de usos mientras no venza ni se revoque)
 _REGLAS: dict[str, tuple[timedelta, int | None]] = {
@@ -54,6 +58,7 @@ _REGLAS: dict[str, tuple[timedelta, int | None]] = {
     PARA_PAGO: (timedelta(minutes=10), 1),
     PARA_INSCRIPCION: (timedelta(minutes=20), 2),
     PARA_MODULO_PAGOS: (timedelta(hours=12), None),
+    PARA_ACTIVACION: (timedelta(minutes=20), 2),
 }
 
 

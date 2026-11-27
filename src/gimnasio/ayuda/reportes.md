@@ -23,7 +23,7 @@ Los archivos llevan arriba el título, los filtros usados y la fecha en que se g
 |---|---|
 | Clientes por vencer | Clientes activos cuyo plan vence en los próximos N días, con teléfono, saldo y casillero. Sirve para llamarlos y que renueven. |
 | Clientes vencidos | Clientes activos con el plan vencido sin renovar, con los días de vencido. N = vencidos en los últimos N días (0 = todos). |
-| Clientes morosos (saldo pendiente) | Membresías con abonos incompletos y cuánto deben. |
+| Clientes morosos (saldo pendiente) | Membresías que quedaron con saldo de antes (cuando se recibían abonos) y cuánto deben. |
 | Nuevos, renovaciones y bajas por mes | Resumen mes a mes: clientes nuevos, renovaciones, clientes inactivados y clientes que se vencieron y no renovaron. |
 | Clientes nuevos (detalle) | Clientes registrados en el periodo con su primera membresía. |
 | Renovaciones (detalle) | Membresías vendidas a clientes que ya habían tenido otra. |

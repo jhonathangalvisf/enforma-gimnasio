@@ -208,8 +208,7 @@ def test_solo_admin_inactiva(clientes, admin, recepcion, fabrica):
     ficha = clientes.registrar(admin, datos())
     with pytest.raises(ErrorPermiso):
         clientes.inactivar(recepcion, ficha.id, "No paga")
-    with pytest.raises(ErrorPermiso):
-        clientes.activar(recepcion, ficha.id)
+    # Recepción solo activa con la clave de un administrador (ver test_autorizaciones).
     with pytest.raises(ErrorValidacion, match="motivo"):
         clientes.inactivar(admin, ficha.id, "")
     clientes.inactivar(admin, ficha.id, "Se retiró")

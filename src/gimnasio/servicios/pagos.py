@@ -6,8 +6,9 @@ Reglas:
   fecha de fin (o hoy, según la configuración). Si ya venció, inicia hoy o en la
   fecha que se elija.
 - Precio distinto al del plan (descuento) solo lo pone el administrador, con motivo.
-- Se aceptan abonos: el saldo de una membresía es su precio pactado menos los pagos
-  no anulados. Ningún pago puede superar el saldo.
+- Solo pago completo y anticipado (decisión del 27/11/2026): la membresía se registra
+  con su pago por el valor total; no hay abonos ni membresías sin pago. Los saldos que
+  quedaron de antes (precio pactado menos pagos no anulados) se pagan de una sola vez.
 - Nada financiero se borra (RN-07): pagos y membresías se anulan con motivo (solo
   el administrador). Anular una membresía anula también sus pagos.
 - Cada recibo recibe un consecutivo que nunca se repite. Si el cliente paga la
@@ -36,7 +37,7 @@ from gimnasio.modelos import (
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
 from gimnasio.servicios.autorizaciones import (
-    PARA_INSCRIPCION, PARA_MODULO_PAGOS, PARA_PAGO, Autorizacion, ServicioAutorizaciones,
+    PARA_ACTIVACION, PARA_INSCRIPCION, PARA_MODULO_PAGOS, PARA_PAGO, Autorizacion, ServicioAutorizaciones,
     registrar_uso,
 )
 from gimnasio.servicios.configuracion import ServicioConfiguracion
@@ -375,10 +376,11 @@ class ServicioPagos:
         pago: DatosPago | None = None,
         autorizacion: Autorizacion | None = None,
     ) -> MembresiaRegistrada:
-        """Registra la membresía y, si se indica, su primer pago (completo o abono).
+        """Registra la membresía con su pago completo (sin abonos).
         Recepción necesita la autorización de un administrador (pago o inscripción)."""
         exigir(actual, Permiso.REGISTRAR_PAGOS)
-        admin = self.autorizaciones.verificar(actual, autorizacion, PARA_PAGO, PARA_INSCRIPCION)
+        admin = self.autorizaciones.verificar(actual, autorizacion, PARA_PAGO, PARA_INSCRIPCION,
+                                             PARA_ACTIVACION)
         ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
@@ -464,9 +466,15 @@ class ServicioPagos:
                     f"{formato_fecha(cruce.fecha_fin + timedelta(days=1))}."
                 )
 
-        if pago is not None and pago.monto > precio_pactado:
+        if precio_pactado > 0 and pago is None:
             raise ErrorValidacion(
-                "El pago no puede ser mayor que el precio de la membresía."
+                "Registre el pago completo de la membresía: solo se registran membresías "
+                "pagadas por adelantado."
+            )
+        if pago is not None and pago.monto != precio_pactado:
+            raise ErrorValidacion(
+                f"El pago debe ser por el valor completo de la membresía "
+                f"({_pesos(precio_pactado)}). No se reciben abonos."
             )
 
         membresia = Membresia(
@@ -574,10 +582,10 @@ class ServicioPagos:
                 saldo = membresia.precio_pactado - pagado
                 if saldo <= 0:
                     raise ErrorValidacion("La membresía ya está paga por completo.")
-                if datos.monto > saldo:
+                if datos.monto != saldo:
                     raise ErrorValidacion(
-                        f"El pago supera el saldo pendiente de la membresía "
-                        f"({_pesos(saldo)})."
+                        f"El saldo pendiente se paga completo ({_pesos(saldo)}). "
+                        "No se reciben abonos."
                     )
             elif membresia_id is not None:
                 raise ErrorValidacion("Solo los pagos de membresía se asocian a una membresía.")

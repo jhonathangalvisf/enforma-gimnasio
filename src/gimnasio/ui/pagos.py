@@ -1,5 +1,5 @@
 """Pantallas de membresías y pagos: renovar o registrar membresía, registrar pagos
-(abonos, casillero u otro), recibos en PDF, anulaciones (solo admin) y cierre de caja."""
+(saldo antiguo, casillero u otro), recibos en PDF, anulaciones (solo admin) y cierre de caja."""
 
 from __future__ import annotations
 
@@ -112,6 +112,12 @@ class _CamposPago(QGroupBox):
         if efectivo:
             self.referencia.clear()
 
+    def fijar_monto(self) -> None:
+        """El monto no se edita: se cobra el valor completo (no hay abonos)."""
+        self.monto.setReadOnly(True)  # (sin NoButtons: con la hoja de estilos ocultaría el texto)
+        self.monto.setStyleSheet("background: #eef2f6; font-weight: 600;")
+        self.monto.setToolTip("Se cobra el valor completo: no se reciben abonos.")
+
     def datos(self) -> DatosPago:
         return DatosPago(self.monto.value(), self.metodo.currentData(), self.referencia.text())
 
@@ -179,7 +185,8 @@ def plan_sin_precio(plan) -> str:
 
 
 class DialogoMembresia(_DialogoBase):
-    """Registrar o renovar una membresía, con el pago (completo o abono) en el mismo paso.
+    """Registrar o renovar una membresía, con su pago completo en el mismo paso (no hay
+    abonos: solo se registran membresías pagadas por adelantado).
     Opcionalmente cobra también el casillero en el mismo recibo."""
 
     def __init__(self, servicios: Servicios, actual: UsuarioActual, cliente_id: int,
@@ -231,12 +238,12 @@ class DialogoMembresia(_DialogoBase):
                           "precio en Configuración → Planes.")
         self.avisos = etiqueta("\n".join(avisos), "textoSuave")
         self._capa.insertWidget(self._capa.indexOf(self.error), self.avisos)
-        self.pago = _CamposPago("Pago ahora")
-        self.sin_pago = QCheckBox("Registrar sin pago (queda todo el valor como saldo pendiente)")
+        self.pago = _CamposPago("Pago completo")
+        self.pago.fijar_monto()  # siempre el valor completo, sin abonos
         self.abrir_recibo = QCheckBox("Abrir el recibo al guardar para imprimirlo")
         self.abrir_recibo.setChecked(True)
         self.casillero: _CamposCasillero | None = None
-        widgets = [self.pago, self.sin_pago]
+        widgets = [self.pago]
         if actual.puede(Permiso.ASIGNAR_CASILLERO):
             self.casillero = _CamposCasillero(servicios, actual, cliente_id)
             self.casillero.setChecked(con_casillero)
@@ -253,7 +260,6 @@ class DialogoMembresia(_DialogoBase):
         self.campo_plan.currentIndexChanged.connect(self._al_cambiar_plan)
         self.campo_inicio.dateChanged.connect(self._actualizar_fin)
         self.campo_precio.valueChanged.connect(self._al_cambiar_precio)
-        self.sin_pago.toggled.connect(lambda v: self.pago.setEnabled(not v))
         self._al_cambiar_plan()
 
     def plan_elegido(self):
@@ -284,8 +290,7 @@ class DialogoMembresia(_DialogoBase):
         distinto = bool(plan) and self.campo_precio.value() != plan.precio
         self.campo_motivo.setVisible(distinto)
         self.etiqueta_motivo.setVisible(distinto)
-        if self.pago.monto.value() > self.campo_precio.value():
-            self.pago.monto.setValue(self.campo_precio.value())
+        self.pago.monto.setValue(self.campo_precio.value())  # se paga completo
 
     def guardar(self) -> None:
         plan = self.plan_elegido()
@@ -297,13 +302,7 @@ class DialogoMembresia(_DialogoBase):
         if plan_sin_precio(plan):
             self.mostrar_error(plan_sin_precio(plan))
             return
-        sin_pago = self.sin_pago.isChecked() or self.campo_precio.value() == 0
         con_casillero = self.casillero is not None and self.casillero.isChecked()
-        if con_casillero and sin_pago:
-            self.mostrar_error(
-                "Para cobrar el casillero en el mismo recibo registre también el pago "
-                "de la mensualidad (o quite el casillero y cóbrelo aparte).")
-            return
         if not asegurar_autorizacion(self, PARA_PAGO):
             return
         comunes = dict(fecha_inicio=leer_fecha(self.campo_inicio),
@@ -319,7 +318,7 @@ class DialogoMembresia(_DialogoBase):
             else:
                 self.resultado = self._servicios.pagos.registrar_membresia(
                     self._actual, self._cliente_id, plan.id,
-                    pago=None if sin_pago else self.pago.datos(), **comunes)
+                    pago=self.pago.datos(), **comunes)
         except ErrorNegocio as e:
             olvidar_autorizacion_si_falla(self, e)
             self.mostrar_error(str(e))
@@ -331,12 +330,13 @@ class DialogoMembresia(_DialogoBase):
 
 
 class DialogoPago(_DialogoBase):
-    """Abono a una membresía (si se indica) o pago de casillero u otro concepto."""
+    """Pago del saldo que una membresía traía de antes (completo, si se indica) o pago de
+    otro concepto."""
 
     def __init__(self, servicios: Servicios, actual: UsuarioActual, cliente_id: int,
                  membresia: FilaMembresia | None = None, nombre_cliente: str = "",
                  padre: QWidget | None = None):
-        super().__init__("Registrar abono" if membresia else "Pago de otro concepto", nombre_cliente,
+        super().__init__("Pagar saldo pendiente" if membresia else "Pago de otro concepto", nombre_cliente,
                          padre)
         self.setMinimumWidth(600)
         self._servicios, self._actual, self._cliente_id = servicios, actual, cliente_id
@@ -364,6 +364,8 @@ class DialogoPago(_DialogoBase):
             aviso.setStyleSheet("color: #8a5300; font-weight: 600;")
             self.formulario.addRow(aviso)
         self.pago = _CamposPago("Pago", membresia.saldo if membresia else 0)
+        if membresia:
+            self.pago.fijar_monto()  # el saldo se paga completo, sin abonos
         self.abrir_recibo = QCheckBox("Abrir el recibo al guardar para imprimirlo")
         self.abrir_recibo.setChecked(True)
         for w in (self.pago, self.abrir_recibo):

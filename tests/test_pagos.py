@@ -17,6 +17,9 @@ from gimnasio.servicios.pagos import (
     DatosPago, calcular_fecha_fin, calcular_inicio_renovacion, numero_recibo,
 )
 
+from tests.conftest import dejar_saldo_antiguo  # noqa: E402
+
+PAGO = DatosPago(120_000)  # pago completo del plan mensual
 HOY = date(2026, 11, 26)  # el reloj de prueba está en 26/11/2026 10:00 en Bogotá
 
 
@@ -166,7 +169,7 @@ def test_recibo_de_otro_concepto_dice_la_vigencia_actual(servicios, admin, clien
 
 
 def test_editar_plan_no_cambia_membresias_existentes(servicios, admin, mensual, cliente):
-    m = servicios.pagos.registrar_membresia(admin, cliente, mensual.id)
+    m = servicios.pagos.registrar_membresia(admin, cliente, mensual.id, pago=PAGO)
     servicios.planes.editar(admin, mensual.id, "Mensual", 31, 150_000)
     ficha = servicios.clientes.obtener_ficha(admin, cliente)
     assert ficha.membresias[0].precio_pactado == 120_000
@@ -186,13 +189,13 @@ def test_primera_membresia_inicia_hoy(servicios, recepcion, mensual, cliente):
 
 
 def test_renovacion_anticipada_inicia_al_dia_siguiente(servicios, recepcion, mensual, cliente):
-    primera = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
+    primera = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
     propuesta = servicios.pagos.proponer_membresia(recepcion, cliente)
     assert propuesta.plan_id == mensual.id  # renovación rápida: el último plan
     assert propuesta.fecha_inicio == primera.fecha_fin + timedelta(days=1)
     assert propuesta.fecha_fin == date(2027, 1, 24)
     assert propuesta.fin_actual == primera.fecha_fin
-    segunda = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
+    segunda = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
     assert segunda.fecha_inicio == date(2026, 12, 26)
     assert servicios.clientes.obtener_ficha(recepcion, cliente).fecha_fin == date(2027, 1, 24)
 
@@ -200,53 +203,58 @@ def test_renovacion_anticipada_inicia_al_dia_siguiente(servicios, recepcion, men
 def test_renovacion_de_cliente_vencido_inicia_hoy_o_la_fecha_elegida(
     servicios, admin, recepcion, mensual, cliente, reloj
 ):
-    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
+    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
     reloj.avanzar(days=40)  # vencida desde el 25/12
     hoy = HOY + timedelta(days=40)
     assert servicios.pagos.proponer_membresia(recepcion, cliente).fecha_inicio == hoy
     elegida = hoy + timedelta(days=3)
-    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, fecha_inicio=elegida)
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, fecha_inicio=elegida,
+                                            pago=PAGO)
     assert m.fecha_inicio == elegida
 
 
 def test_no_se_cruzan_membresias(servicios, recepcion, mensual, cliente):
-    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
+    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
     with pytest.raises(ErrorValidacion, match="26/12/2026"):
         servicios.pagos.registrar_membresia(
-            recepcion, cliente, mensual.id, fecha_inicio=HOY + timedelta(days=10))
+            recepcion, cliente, mensual.id, fecha_inicio=HOY + timedelta(days=10), pago=PAGO)
 
 
 def test_politica_iniciar_hoy(servicios, admin, recepcion, mensual, cliente):
     servicios.configuracion.guardar(admin, {"renovacion_anticipada": "hoy"})
-    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
-    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
+    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
     assert m.fecha_inicio == HOY  # pierde los días restantes, sin error de cruce
 
 
 def test_limites_de_fecha_de_inicio(servicios, admin, recepcion, mensual, cliente):
     with pytest.raises(ErrorPermiso):
         servicios.pagos.registrar_membresia(
-            recepcion, cliente, mensual.id, fecha_inicio=HOY - timedelta(days=31))
+            recepcion, cliente, mensual.id, fecha_inicio=HOY - timedelta(days=31), pago=PAGO)
     with pytest.raises(ErrorValidacion):
         servicios.pagos.registrar_membresia(
-            admin, cliente, mensual.id, fecha_inicio=HOY + timedelta(days=91))
+            admin, cliente, mensual.id, fecha_inicio=HOY + timedelta(days=91), pago=PAGO)
     m = servicios.pagos.registrar_membresia(
-        admin, cliente, mensual.id, fecha_inicio=HOY - timedelta(days=31))
+        admin, cliente, mensual.id, fecha_inicio=HOY - timedelta(days=31), pago=PAGO)
     assert m.fecha_fin == HOY - timedelta(days=2)
 
 
 def test_descuento_solo_admin_con_motivo(servicios, admin, recepcion, mensual, cliente, fabrica):
     with pytest.raises(ErrorPermiso):
-        servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, precio_pactado=100_000)
+        servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, precio_pactado=100_000,
+                                            pago=DatosPago(100_000))
     with pytest.raises(ErrorValidacion, match="motivo"):
-        servicios.pagos.registrar_membresia(admin, cliente, mensual.id, precio_pactado=100_000)
+        servicios.pagos.registrar_membresia(admin, cliente, mensual.id, precio_pactado=100_000,
+                                            pago=DatosPago(100_000))
     m = servicios.pagos.registrar_membresia(
-        admin, cliente, mensual.id, precio_pactado=100_000, motivo_descuento="Referido")
+        admin, cliente, mensual.id, precio_pactado=100_000, motivo_descuento="Referido",
+        pago=DatosPago(100_000))
     assert m.precio_pactado == 100_000
     detalle = auditorias(fabrica, "membresia_registrada")[0]
     assert detalle["motivo_descuento"] == "Referido" and detalle["precio_plan"] == 120_000
     # Mismo precio del plan: recepción no necesita permiso ni motivo.
-    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, precio_pactado=120_000)
+    servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, precio_pactado=120_000,
+                                        pago=PAGO)
 
 
 def test_no_se_registra_membresia_a_inactivo_ni_con_plan_inactivo(
@@ -262,33 +270,36 @@ def test_no_se_registra_membresia_a_inactivo_ni_con_plan_inactivo(
 
 # --- pagos y saldos ---------------------------------------------------------------------
 
-def test_abonos_y_saldo(servicios, recepcion, mensual, cliente):
-    m = servicios.pagos.registrar_membresia(
-        recepcion, cliente, mensual.id, pago=DatosPago(50_000, "efectivo"))
-    assert m.saldo == 70_000 and m.pago.saldo_despues == 70_000
-    assert servicios.pagos.saldo_cliente(recepcion, cliente) == 70_000
-    with pytest.raises(ErrorValidacion, match="supera el saldo"):
-        servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(80_000), membresia_id=m.id)
-    abono = servicios.pagos.registrar_pago(
-        recepcion, cliente, DatosPago(70_000, "transferencia", "NEQ-123"), membresia_id=m.id)
-    assert abono.saldo_despues == 0 and abono.recibo == "R-000002"
-    with pytest.raises(ErrorValidacion, match="paga por completo"):
-        servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(1), membresia_id=m.id)
-    ficha = servicios.clientes.obtener_ficha(recepcion, cliente)
-    assert ficha.membresias[0].pagado == 120_000 and ficha.saldo_pendiente == 0
-    assert {p.membresia_id for p in ficha.pagos} == {m.id}
-
-
-def test_membresia_sin_pago_queda_con_saldo(servicios, recepcion, mensual, cliente):
-    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
-    assert m.pago is None and m.saldo == 120_000
-    assert servicios.pagos.saldo_cliente(recepcion, cliente) == 120_000
-
-
-def test_pago_inicial_no_supera_precio(servicios, recepcion, mensual, cliente):
-    with pytest.raises(ErrorValidacion):
+def test_solo_pago_completo_sin_abonos(servicios, recepcion, mensual, cliente):
+    with pytest.raises(ErrorValidacion, match="valor completo"):
+        servicios.pagos.registrar_membresia(
+            recepcion, cliente, mensual.id, pago=DatosPago(50_000, "efectivo"))
+    with pytest.raises(ErrorValidacion, match="valor completo"):
         servicios.pagos.registrar_membresia(
             recepcion, cliente, mensual.id, pago=DatosPago(130_000))
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
+    assert m.saldo == 0 and m.pago.saldo_despues == 0
+    with pytest.raises(ErrorValidacion, match="paga por completo"):
+        servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(1), membresia_id=m.id)
+
+
+def test_membresia_sin_pago_no_se_registra(servicios, recepcion, mensual, cliente):
+    with pytest.raises(ErrorValidacion, match="pago completo"):
+        servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
+    assert servicios.clientes.obtener_ficha(recepcion, cliente).membresias == []
+
+
+def test_saldo_antiguo_se_paga_completo(servicios, recepcion, mensual, cliente, fabrica):
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
+    dejar_saldo_antiguo(fabrica, m.pago.id, 50_000)  # saldo de antes de quitar los abonos
+    assert servicios.pagos.saldo_cliente(recepcion, cliente) == 70_000
+    with pytest.raises(ErrorValidacion, match="se paga completo"):
+        servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(30_000), membresia_id=m.id)
+    pago = servicios.pagos.registrar_pago(
+        recepcion, cliente, DatosPago(70_000, "transferencia", "NEQ-123"), membresia_id=m.id)
+    assert pago.saldo_despues == 0 and pago.recibo == "R-000002"
+    ficha = servicios.clientes.obtener_ficha(recepcion, cliente)
+    assert ficha.membresias[0].pagado == 120_000 and ficha.saldo_pendiente == 0
 
 
 @pytest.mark.parametrize("datos, mensaje", [
@@ -307,7 +318,7 @@ def test_pago_de_casillero_u_otro_sin_membresia(servicios, recepcion, mensual, c
     p = servicios.pagos.registrar_pago(
         recepcion, cliente, DatosPago(20_000, "tarjeta", "APR-55"), concepto="casillero")
     assert p.saldo_despues is None
-    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
     with pytest.raises(ErrorValidacion):
         servicios.pagos.registrar_pago(
             recepcion, cliente, DatosPago(1000), concepto="otro", membresia_id=m.id)
@@ -318,7 +329,7 @@ def test_pago_de_casillero_u_otro_sin_membresia(servicios, recepcion, mensual, c
 def test_abono_a_membresia_de_otro_cliente(servicios, admin, recepcion, mensual, cliente):
     otro = servicios.clientes.registrar(admin, DatosCliente(
         tipo_documento="CC", documento="99999999", nombres="Otro", apellidos="Cliente", sexo="M"))
-    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id)
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
     with pytest.raises(ErrorValidacion, match="no pertenece"):
         servicios.pagos.registrar_pago(recepcion, otro.id, DatosPago(1000), membresia_id=m.id)
 
@@ -366,8 +377,9 @@ def test_anular_pago_solo_admin_con_motivo(servicios, admin, recepcion, mensual,
     assert auditorias(fabrica, "pago_anulado")[0]["motivo"] == "Se cobró dos veces"
 
 
-def test_anular_membresia_anula_sus_pagos(servicios, admin, recepcion, mensual, cliente):
-    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=DatosPago(60_000))
+def test_anular_membresia_anula_sus_pagos(servicios, admin, recepcion, mensual, cliente, fabrica):
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
+    dejar_saldo_antiguo(fabrica, m.pago.id, 60_000)
     servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(60_000), membresia_id=m.id)
     casillero = servicios.pagos.registrar_pago(
         recepcion, cliente, DatosPago(10_000), concepto="casillero")
@@ -435,7 +447,8 @@ def test_cierre_de_caja(servicios, admin, recepcion, mensual, cliente, reloj):
 
 def test_recibo_pdf(servicios, admin, recepcion, mensual, cliente, tmp_path, fabrica):
     servicios.configuracion.guardar(admin, {"gimnasio_nit": "900.123.456-7"})
-    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=DatosPago(50_000))
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, mensual.id, pago=PAGO)
+    dejar_saldo_antiguo(fabrica, m.pago.id, 50_000)
     datos = servicios.pagos.datos_recibo(recepcion, m.pago.id)
     assert datos.recibo == "R-000001" and datos.saldo_despues == 70_000
     assert datos.gimnasio_nit == "900.123.456-7"
@@ -443,7 +456,7 @@ def test_recibo_pdf(servicios, admin, recepcion, mensual, cliente, tmp_path, fab
     ruta = servicios.pagos.generar_recibo(recepcion, m.pago.id)
     assert ruta == tmp_path / "recibos" / "R-000001.pdf"
     assert ruta.read_bytes().startswith(b"%PDF")
-    # Un abono posterior no cambia el saldo que muestra el primer recibo.
+    # Pagar después el saldo antiguo no cambia el saldo que muestra el primer recibo.
     abono = servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(70_000), membresia_id=m.id)
     assert servicios.pagos.datos_recibo(recepcion, m.pago.id).saldo_despues == 70_000
     assert servicios.pagos.datos_recibo(recepcion, abono.id).saldo_despues == 0

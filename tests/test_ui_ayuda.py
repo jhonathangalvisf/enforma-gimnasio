@@ -117,7 +117,8 @@ def test_tema_para_los_dialogos(qapp, servicios, admin):
     assert tema_para(DialogoAsignarCasillero(servicios, admin, cliente_id=ficha.id)) == "casilleros"
     assert tema_para(DialogoUsuario(servicios, admin)) == "usuarios"
     assert tema_para(DialogoCambiarClave(servicios, admin)) == "inicio"
-    caja = QtWidgets.QMessageBox(DialogoMembresia(servicios, admin, ficha.id))
+    dialogo = DialogoMembresia(servicios, admin, ficha.id)  # se guarda: si no, Python lo libera
+    caja = QtWidgets.QMessageBox(dialogo)
     assert tema_para(caja) == "pagos"  # mensajes: el tema de su ventana
 
 

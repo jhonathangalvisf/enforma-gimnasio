@@ -31,7 +31,7 @@ from gimnasio.modelos import (
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
 from gimnasio.servicios.autorizaciones import (
-    PARA_INSCRIPCION, Autorizacion, ServicioAutorizaciones, registrar_uso,
+    PARA_ACTIVACION, PARA_INSCRIPCION, Autorizacion, ServicioAutorizaciones, registrar_uso,
 )
 from gimnasio.servicios.autorizaciones import PARA_MODULO_CLIENTES
 from gimnasio.servicios.configuracion import ServicioConfiguracion
@@ -810,20 +810,30 @@ class ServicioClientes:
             )
             sesion.commit()
 
-    def activar(self, actual: UsuarioActual, cliente_id: int) -> None:
-        exigir(actual, Permiso.ACTIVAR_CLIENTES)
+    def activar(self, actual: UsuarioActual, cliente_id: int,
+                autorizacion: Autorizacion | None = None) -> None:
+        """Vuelve a activar a un cliente inactivo. El administrador lo hace directo;
+        Recepción (botón «Activar cliente») con la clave de un administrador
+        ("activacion"), que sirve también para cobrarle la mensualidad enseguida."""
+        admin = None
+        if not actual.puede(Permiso.ACTIVAR_CLIENTES):
+            exigir(actual, Permiso.REGISTRAR_PAGOS)
+            admin = self._autorizaciones.verificar(actual, autorizacion, PARA_ACTIVACION)
+        ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
             cliente = self._obtener(sesion, cliente_id)
             if cliente.estado == "activo":
                 raise ErrorValidacion("El cliente ya está activo.")
             cliente.estado = "activo"
-            cliente.actualizado_en = self._reloj()
+            cliente.actualizado_en = ahora
             auditoria.registrar(
                 sesion, "cliente_activado", "clientes", usuario_id=actual.id,
-                entidad_id=cliente.id, detalle={"codigo": cliente.codigo},
+                entidad_id=cliente.id, detalle={"codigo": cliente.codigo}, momento=ahora,
             )
+            registrar_uso(sesion, actual, admin, "activación", ahora, cliente=cliente.codigo)
             sesion.commit()
+        self._autorizaciones.gastar(autorizacion)
 
     # --- consulta ---------------------------------------------------------------------
     def obtener_ficha(

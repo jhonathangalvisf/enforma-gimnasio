@@ -84,7 +84,7 @@ CATALOGO: tuple[DefinicionReporte, ...] = (
         ("dias", "plan", "sexo")),
     DefinicionReporte(
         "clientes_morosos", "Clientes", "Clientes morosos (saldo pendiente)",
-        "Membresías no anuladas con saldo por pagar (abonos incompletos).", ("plan", "sexo")),
+        "Membresías no anuladas con saldo por pagar (saldos de antes, cuando se recibían abonos).", ("plan", "sexo")),
     DefinicionReporte(
         "clientes_mensual", "Clientes", "Nuevos, renovaciones y bajas por mes",
         "Por cada mes: clientes nuevos, renovaciones, clientes inactivados y clientes "

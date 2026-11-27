@@ -36,7 +36,7 @@ from gimnasio.modelos import (
 from gimnasio.servicios import auditoria
 from gimnasio.servicios.auditoria import inicio_dia_utc
 from gimnasio.servicios.autorizaciones import (
-    PARA_INSCRIPCION, PARA_PAGO, Autorizacion, registrar_uso,
+    PARA_ACTIVACION, PARA_INSCRIPCION, PARA_PAGO, Autorizacion, registrar_uso,
 )
 from gimnasio.servicios.clientes import NOMBRES_VIGENCIA, SEXOS, Vigencia, calcular_vigencia
 from gimnasio.servicios.configuracion import ServicioConfiguracion
@@ -654,7 +654,7 @@ class ServicioCasilleros:
         exigir(actual, Permiso.REGISTRAR_PAGOS)
         exigir(actual, Permiso.ASIGNAR_CASILLERO)
         admin = self._pagos.autorizaciones.verificar(
-            actual, autorizacion, PARA_PAGO, PARA_INSCRIPCION)
+            actual, autorizacion, PARA_PAGO, PARA_INSCRIPCION, PARA_ACTIVACION)
         if pago is None:
             raise ErrorValidacion(
                 "Para cobrar el casillero en el mismo recibo registre también el pago de "
