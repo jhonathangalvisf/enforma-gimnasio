@@ -84,7 +84,7 @@ Cada línea muestra la fecha y hora, quién lo hizo, la acción y el detalle (po
 
 Trae los datos del programa viejo del gimnasio (el de dBase, carpeta **DB3** con archivos `.DBF`). Solo el administrador lo ve. La carpeta original **no se modifica**: se copia a la carpeta de datos (`importaciones`) y se lee la copia.
 
-1. Pulse **Elegir carpeta…** y busque la carpeta **DB3** (la que tiene `ENCLIE.DBF`).
+1. Pulse **Elegir carpeta…** (a la izquierda del campo) y busque la carpeta **DB3** (la que tiene `ENCLIE.DBF`). También puede pegar su ruta en el campo, con o sin comillas (como la copia Windows con «Copiar como ruta»).
 2. Pulse **Probar sin guardar**. No se guarda nada; se crea un **informe en Excel** con el resumen y la hoja **Problemas** (fila por fila: qué estaba mal y qué se hizo). Ábralo con **Abrir informe en Excel**.
 3. Si está de acuerdo, pulse **Importar de verdad**. Antes se hace una **copia de seguridad** (configure primero la contraseña de las copias); si la copia falla, no se importa nada. Solo se puede importar **una vez**.
 

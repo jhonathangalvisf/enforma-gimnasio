@@ -294,3 +294,25 @@ def test_sin_documento_se_puede_editar_y_no_inscribir(servicios, admin, recepcio
         servicios.clientes.registrar(admin, DatosCliente(
             tipo_documento="SD", documento="SD000999", nombres="Nuevo", apellidos="Cliente",
             sexo="M"))
+
+
+# --- ruta pegada por el usuario ----------------------------------------------------
+def test_limpiar_ruta(db3):
+    from gimnasio.servicios.importacion import limpiar_ruta
+
+    assert limpiar_ruta(f'  "{db3}"  ') == db3  # «Copiar como ruta» de Windows
+    assert limpiar_ruta(f"'{db3}'") == db3
+    assert limpiar_ruta(f"“{db3}”") == db3
+    assert limpiar_ruta(f'"{db3 / "ENCLIE.DBF"}"') == db3  # ruta de un archivo de la carpeta
+
+
+def test_importar_acepta_ruta_entre_comillas(servicios, admin, db3):
+    r = servicios.importacion.importar(admin, f'"{db3}"')
+    assert r.clientes == 4
+
+
+def test_carpeta_inexistente_explica_que_hacer(servicios, admin, tmp_path):
+    with pytest.raises(ErrorValidacion, match="Elegir carpeta"):
+        servicios.importacion.importar(admin, f'"{tmp_path / "no_existe"}"')
+    with pytest.raises(ErrorValidacion, match="Elija la carpeta"):
+        servicios.importacion.importar(admin, '  ""  ')
