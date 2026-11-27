@@ -161,14 +161,14 @@ def test_pestana_planes(qapp, servicios, admin):
     conf = PantallaConfiguracion(servicios, admin)
     assert conf.pestanas.tabText(2) == "Planes"
     planes = conf.planes
-    assert planes.tabla.rowCount() == 4
+    assert planes.tabla.rowCount() == 6
     d = DialogoPlan(servicios, admin)
     d.campo_nombre.setText("Semestral")
     d.campo_dias.setValue(180)
     d.campo_precio.setValue(600_000)
     d.guardar()
     planes.cargar()
-    assert planes.tabla.rowCount() == 5
+    assert planes.tabla.rowCount() == 7
     semestral = next(p for p in servicios.planes.listar(admin) if p.nombre == "Semestral")
     assert semestral.activo and semestral.precio == 600_000
     fila = next(i for i in range(planes.tabla.rowCount())

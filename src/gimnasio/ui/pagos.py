@@ -170,6 +170,14 @@ class _CamposCasillero(QGroupBox):
                                  casillero_id=self.campo_casillero.currentData())
 
 
+def plan_sin_precio(plan) -> str:
+    """Mensaje si el plan todavía no tiene precio (no se puede vender), o ""."""
+    if plan is None or plan.precio > 0:
+        return ""
+    return (f"El plan «{plan.nombre}» todavía no tiene precio. Un administrador lo pone en "
+            "Configuración → Planes (Editar).")
+
+
 class DialogoMembresia(_DialogoBase):
     """Registrar o renovar una membresía, con el pago (completo o abono) en el mismo paso.
     Opcionalmente cobra también el casillero en el mismo recibo."""
@@ -219,7 +227,8 @@ class DialogoMembresia(_DialogoBase):
         if not propuesta.cliente_activo:
             avisos.append("✖ El cliente está inactivo: el administrador debe activarlo primero.")
         if not self._planes:
-            avisos.append("No hay planes activos. El administrador los crea en Configuración → Planes.")
+            avisos.append("✖ No hay planes para vender. Un administrador los crea y les pone "
+                          "precio en Configuración → Planes.")
         self.avisos = etiqueta("\n".join(avisos), "textoSuave")
         self._capa.insertWidget(self._capa.indexOf(self.error), self.avisos)
         self.pago = _CamposPago("Pago ahora")
@@ -255,6 +264,11 @@ class DialogoMembresia(_DialogoBase):
         if plan:
             self.campo_precio.setValue(plan.precio)
             self.pago.monto.setValue(plan.precio)
+        sin_precio = plan_sin_precio(plan)
+        if sin_precio:
+            self.mostrar_error(sin_precio)
+        else:
+            self.error.hide()
         self._actualizar_fin()
         self._al_cambiar_precio()
 
@@ -276,7 +290,12 @@ class DialogoMembresia(_DialogoBase):
     def guardar(self) -> None:
         plan = self.plan_elegido()
         if plan is None:
-            self.mostrar_error("Elija un plan.")
+            self.mostrar_error("Elija un plan." if self._planes else
+                               "No hay planes para vender. Un administrador los crea en "
+                               "Configuración → Planes.")
+            return
+        if plan_sin_precio(plan):
+            self.mostrar_error(plan_sin_precio(plan))
             return
         sin_pago = self.sin_pago.isChecked() or self.campo_precio.value() == 0
         con_casillero = self.casillero is not None and self.casillero.isChecked()
@@ -317,7 +336,8 @@ class DialogoPago(_DialogoBase):
     def __init__(self, servicios: Servicios, actual: UsuarioActual, cliente_id: int,
                  membresia: FilaMembresia | None = None, nombre_cliente: str = "",
                  padre: QWidget | None = None):
-        super().__init__("Registrar abono" if membresia else "Registrar pago", nombre_cliente, padre)
+        super().__init__("Registrar abono" if membresia else "Pago de otro concepto", nombre_cliente,
+                         padre)
         self.setMinimumWidth(600)
         self._servicios, self._actual, self._cliente_id = servicios, actual, cliente_id
         self._membresia = membresia
@@ -337,6 +357,12 @@ class DialogoPago(_DialogoBase):
             # ficha), para que el pago corra su fecha de vencimiento.
             self.campo_concepto.addItem(CONCEPTOS["otro"], "otro")
         self.formulario.addRow("Concepto", self.campo_concepto)
+        if not membresia:
+            aviso = QLabel("⚠ Este pago NO cambia la vigencia del cliente. Para cobrar la "
+                           "mensualidad use «Pagar mensualidad» o «Renovar membresía».")
+            aviso.setWordWrap(True)
+            aviso.setStyleSheet("color: #8a5300; font-weight: 600;")
+            self.formulario.addRow(aviso)
         self.pago = _CamposPago("Pago", membresia.saldo if membresia else 0)
         self.abrir_recibo = QCheckBox("Abrir el recibo al guardar para imprimirlo")
         self.abrir_recibo.setChecked(True)

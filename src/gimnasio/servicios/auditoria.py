@@ -56,7 +56,7 @@ ACCIONES = {
     "plan_editado": "Plan editado",
     "plan_activado": "Plan activado",
     "plan_desactivado": "Plan desactivado",
-    "planes_ejemplo_creados": "Planes de ejemplo creados",
+    "planes_ejemplo_creados": "Planes del gimnasio preparados",
     "membresia_registrada": "Membresía registrada",
     "membresia_anulada": "Membresía anulada",
     "pago_registrado": "Pago registrado",

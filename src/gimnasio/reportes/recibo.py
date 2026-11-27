@@ -1,4 +1,4 @@
-"""Recibo de pago en PDF (RF-P4), tamaño media carta, con logo y consecutivo.
+"""Recibo de pago en PDF (RF-P4): ancho de media carta y 10 cm de alto, con logo y consecutivo.
 
 No es factura electrónica (fuera de alcance): es un recibo de caja interno.
 """
@@ -18,35 +18,54 @@ from gimnasio.formato import fecha, fecha_hora_local, pesos
 if TYPE_CHECKING:
     from gimnasio.servicios.pagos import DatosRecibo
 
-MEDIA_CARTA = (5.5 * inch, 8.5 * inch)
-MARGEN = 14 * mm
+ANCHO = 5.5 * inch          # ancho de media carta
+ALTO = 100 * mm             # 10 cm de alto
+MARGEN = 7 * mm
+COLUMNA = 30 * mm           # donde empiezan los valores
+PASO = 4.3 * mm             # alto de cada renglón
 
 
 def crear_recibo_pdf(datos: DatosRecibo, destino: Path) -> Path:
-    ancho, alto = MEDIA_CARTA
+    """Recibo de 10 cm de alto. Si un recibo trae muchos conceptos y no cabe, la hoja
+    crece lo justo (nunca se corta información)."""
     destino.parent.mkdir(parents=True, exist_ok=True)
-    c = canvas.Canvas(str(destino), pagesize=MEDIA_CARTA)
+    medida = canvas.Canvas(str(destino), pagesize=(ANCHO, 1000 * mm))
+    usado = _dibujar(medida, datos, 1000 * mm)
+    alto = max(ALTO, usado + 9 * mm)  # 9 mm para el pie de página
+    c = canvas.Canvas(str(destino), pagesize=(ANCHO, alto))
     c.setTitle(f"Recibo {datos.recibo}")
     c.setAuthor(datos.gimnasio_nombre)
+    _dibujar(c, datos, alto)
+    c.showPage()
+    c.save()
+    return destino
 
+
+def _dibujar(c: canvas.Canvas, datos: DatosRecibo, alto: float) -> float:
+    """Dibuja el recibo y devuelve cuánto alto ocupó el contenido (sin el pie)."""
+    ancho = ANCHO
     y = alto - MARGEN
-    # Encabezado: logo a la izquierda, datos del gimnasio a la derecha.
+    # Encabezado: solo el logo (sin repetir el nombre). Sin logo, el nombre en texto.
     x_texto = MARGEN
+    alto_logo = 13 * mm
+    con_logo = False
     if datos.logo:
         try:
             imagen = ImageReader(str(datos.logo))
             iw, ih = imagen.getSize()
-            alto_logo = 18 * mm
-            ancho_logo = min(35 * mm, alto_logo * iw / ih)
+            ancho_logo = min(40 * mm, alto_logo * iw / ih)
             c.drawImage(imagen, MARGEN, y - alto_logo, ancho_logo, alto_logo,
                         preserveAspectRatio=True, mask="auto")
             x_texto = MARGEN + ancho_logo + 5 * mm
+            con_logo = True
         except Exception:  # un logo dañado no debe impedir el recibo
             pass
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(x_texto, y - 5 * mm, datos.gimnasio_nombre)
-    c.setFont("Helvetica", 8.5)
-    linea = y - 10 * mm
+    linea = y - 4 * mm
+    if not con_logo:
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(x_texto, linea, datos.gimnasio_nombre)
+        linea -= 5 * mm
+    c.setFont("Helvetica", 8)
     for texto in (
         f"NIT {datos.gimnasio_nit}" if datos.gimnasio_nit else "",
         datos.gimnasio_direccion,
@@ -54,108 +73,118 @@ def crear_recibo_pdf(datos: DatosRecibo, destino: Path) -> Path:
     ):
         if texto:
             c.drawString(x_texto, linea, texto)
-            linea -= 4 * mm
-    y = min(linea, y - 20 * mm) - 4 * mm
+            linea -= 3.6 * mm
+    y = min(linea + 3.6 * mm, y - (alto_logo if con_logo else 6 * mm)) - 3 * mm
 
     # Título y número.
     c.setFillColor(colors.HexColor("#1f4e79"))
-    c.rect(MARGEN, y - 10 * mm, ancho - 2 * MARGEN, 10 * mm, stroke=0, fill=1)
+    c.rect(MARGEN, y - 7 * mm, ancho - 2 * MARGEN, 7 * mm, stroke=0, fill=1)
     c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(MARGEN + 3 * mm, y - 6.8 * mm, "RECIBO DE CAJA")
-    c.drawRightString(ancho - MARGEN - 3 * mm, y - 6.8 * mm, f"N.º {datos.recibo}")
+    c.setFont("Helvetica-Bold", 10.5)
+    c.drawString(MARGEN + 3 * mm, y - 4.8 * mm, "RECIBO DE CAJA")
+    c.drawRightString(ancho - MARGEN - 3 * mm, y - 4.8 * mm, f"N.º {datos.recibo}")
     c.setFillColor(colors.black)
-    y -= 16 * mm
+    y -= 11 * mm
 
     def fila(etiqueta: str, valor: str, negrita: bool = False) -> None:
         nonlocal y
-        c.setFont("Helvetica", 9)
+        c.setFont("Helvetica", 8)
         c.setFillColor(colors.HexColor("#555555"))
         c.drawString(MARGEN, y, etiqueta)
         c.setFillColor(colors.black)
-        c.setFont("Helvetica-Bold" if negrita else "Helvetica", 9.5)
-        for i, parte in enumerate(_partir(valor, 52)):
-            c.drawString(MARGEN + 32 * mm, y - i * 4.2 * mm, parte)
-        y -= max(1, len(_partir(valor, 52))) * 4.2 * mm + 2.2 * mm
+        c.setFont("Helvetica-Bold" if negrita else "Helvetica", 8.8)
+        partes = _partir(valor, 58)
+        for i, parte in enumerate(partes):
+            c.drawString(MARGEN + COLUMNA, y - i * 3.8 * mm, parte)
+        y -= (len(partes) - 1) * 3.8 * mm + PASO
 
     fila("Fecha de pago", fecha_hora_local(datos.fecha_hora))
     fila("Cliente", datos.cliente_nombre, negrita=True)
-    fila("Código", datos.cliente_codigo, negrita=True)
-    fila("Documento", datos.cliente_documento)
+    fila("Código", f"{datos.cliente_codigo}   ·   {datos.cliente_documento}", negrita=False)
     if datos.lineas:
         # Recibo con varios conceptos (mensualidad + casillero): uno por renglón.
-        for i, linea in enumerate(datos.lineas):
-            c.setFont("Helvetica", 9)
+        for i, item in enumerate(datos.lineas):
+            c.setFont("Helvetica", 8)
             c.setFillColor(colors.HexColor("#555555"))
             c.drawString(MARGEN, y, "Conceptos" if i == 0 else "")
-            c.setFillColor(colors.HexColor("#b42318") if linea.anulado else colors.black)
-            c.setFont("Helvetica", 9.5)
-            texto = linea.detalle + ("  (ANULADO)" if linea.anulado else "")
-            partes = _partir(texto, 40)
+            c.setFillColor(colors.HexColor("#b42318") if item.anulado else colors.black)
+            c.setFont("Helvetica", 8.8)
+            texto = item.detalle + ("  (ANULADO)" if item.anulado else "")
+            partes = _partir(texto, 46)
             for k, parte in enumerate(partes):
-                c.drawString(MARGEN + 32 * mm, y - k * 4.2 * mm, parte)
-            c.setFont("Helvetica-Bold", 9.5)
-            c.drawRightString(ancho - MARGEN, y, pesos(linea.monto))
+                c.drawString(MARGEN + COLUMNA, y - k * 3.8 * mm, parte)
+            c.setFont("Helvetica-Bold", 8.8)
+            c.drawRightString(ancho - MARGEN, y, pesos(item.monto))
             c.setFillColor(colors.black)
-            y -= len(partes) * 4.2 * mm + 2.2 * mm
+            y -= (len(partes) - 1) * 3.8 * mm + PASO
     else:
         fila("Concepto", datos.detalle)
+    fila("Método de pago", datos.metodo + (f" · Ref. {datos.referencia}" if datos.referencia else ""))
     if datos.vigencia_hasta is not None:
         # Recuadro destacado con la nueva vigencia (hasta qué día puede entrar).
         c.setFillColor(colors.HexColor("#e8f3ec"))
         c.setStrokeColor(colors.HexColor("#1e7b45"))
-        c.roundRect(MARGEN, y - 9 * mm, ancho - 2 * MARGEN, 12 * mm, 2 * mm, stroke=1, fill=1)
+        c.roundRect(MARGEN, y - 5.5 * mm, ancho - 2 * MARGEN, 8.5 * mm, 1.5 * mm,
+                    stroke=1, fill=1)
         c.setFillColor(colors.HexColor("#1e7b45"))
-        c.setFont("Helvetica-Bold", 9)
-        c.drawString(MARGEN + 3 * mm, y - 1 * mm, "NUEVA VIGENCIA")
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(MARGEN + 3 * mm, y - 6.5 * mm,
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(MARGEN + 3 * mm, y - 2.6 * mm, "NUEVA VIGENCIA")
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(MARGEN + COLUMNA, y - 2.8 * mm,
                      f"Del {fecha(datos.vigencia_desde)} al {fecha(datos.vigencia_hasta)}")
-        c.setFont("Helvetica", 8)
-        c.drawRightString(ancho - MARGEN - 3 * mm, y - 6.5 * mm, "puede entrar hasta ese día inclusive")
         c.setFillColor(colors.black)
-        y -= 15 * mm
-    fila("Método de pago", datos.metodo + (f" · Ref. {datos.referencia}" if datos.referencia else ""))
-    y -= 2 * mm
+        y -= 10.5 * mm
+    else:
+        # Pago que no es mensualidad: se aclara hasta cuándo está al día el cliente.
+        fila("Vigencia actual",
+             f"Hasta el {fecha(datos.vigente_hasta)} (este pago no la cambia)"
+             if datos.vigente_hasta else "Sin membresía (este pago no la cambia)")
     c.setStrokeColor(colors.HexColor("#cccccc"))
-    c.line(MARGEN, y + 3 * mm, ancho - MARGEN, y + 3 * mm)
-    y -= 3 * mm
-    if datos.precio_membresia is not None:
-        fila("Valor membresía", pesos(datos.precio_membresia))
-    c.setFont("Helvetica", 9)
+    c.line(MARGEN, y + 2.6 * mm, ancho - MARGEN, y + 2.6 * mm)
+    y -= 2 * mm
+    c.setFont("Helvetica", 8)
     c.setFillColor(colors.HexColor("#555555"))
     c.drawString(MARGEN, y, "TOTAL PAGADO" if datos.lineas else "VALOR PAGADO")
     c.setFillColor(colors.black)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(MARGEN + 32 * mm, y - 1 * mm, pesos(datos.monto))
-    y -= 9 * mm
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(MARGEN + COLUMNA, y - 0.6 * mm, pesos(datos.monto))
+    # A la derecha del valor: precio y saldo de la membresía, y quién atendió.
+    c.setFont("Helvetica", 8)
+    derecha = []
+    if datos.precio_membresia is not None:
+        derecha.append(f"Valor membresía {pesos(datos.precio_membresia)}")
     if datos.saldo_despues is not None:
-        fila("Saldo pendiente", pesos(datos.saldo_despues) if datos.saldo_despues else "$ 0 (pagado)",
-             negrita=bool(datos.saldo_despues))
-    y -= 4 * mm
+        derecha.append("Saldo pendiente " + (pesos(datos.saldo_despues)
+                                             if datos.saldo_despues else "$ 0 (pagado)"))
+    for i, texto in enumerate(derecha):
+        c.setFont("Helvetica-Bold" if texto.startswith("Saldo") and datos.saldo_despues
+                  else "Helvetica", 8)
+        c.drawRightString(ancho - MARGEN, y - i * 3.8 * mm, texto)
+    y -= max(7 * mm, len(derecha) * 3.8 * mm + 2 * mm)
     fila("Atendido por", datos.usuario)
 
     if datos.anulado:
         c.saveState()
         c.setFillColor(colors.HexColor("#b42318"))
-        c.setFont("Helvetica-Bold", 54)
+        c.setFont("Helvetica-Bold", 44)
         c.translate(ancho / 2, alto / 2)
-        c.rotate(35)
+        c.rotate(20)
         c.setFillAlpha(0.25)
-        c.drawCentredString(0, 0, "ANULADO")
+        c.drawCentredString(0, -15, "ANULADO")
         c.restoreState()
         c.setFillColor(colors.HexColor("#b42318"))
-        c.setFont("Helvetica-Bold", 9)
-        for i, parte in enumerate(_partir(f"ANULADO: {datos.motivo_anulacion}", 70)):
-            c.drawString(MARGEN, 30 * mm - i * 4.2 * mm, parte)
+        c.setFont("Helvetica-Bold", 8)
+        for parte in _partir(f"ANULADO: {datos.motivo_anulacion}", 80):
+            c.drawString(MARGEN, y, parte)
+            y -= 3.8 * mm
         c.setFillColor(colors.black)
 
-    c.setFont("Helvetica", 7.5)
+    c.setFont("Helvetica", 7)
     c.setFillColor(colors.HexColor("#777777"))
-    c.drawCentredString(ancho / 2, 14 * mm, "Gracias por su pago. Este documento no es una factura electrónica.")
-    c.showPage()
-    c.save()
-    return destino
+    c.drawCentredString(ancho / 2, 4.5 * mm,
+                        "Gracias por su pago. Este documento no es una factura electrónica.")
+    c.setFillColor(colors.black)
+    return alto - y
 
 
 def _partir(texto: str, ancho: int) -> list[str]:

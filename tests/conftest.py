@@ -12,6 +12,29 @@ from gimnasio.db.migraciones import actualizar_esquema
 from gimnasio.modelos import Casillero, Cliente, Usuario
 
 
+# Al terminar, Qt destruye sus ventanas mientras Python se cierra. En Windows eso
+# a veces falla después de que todas las pruebas pasaron, y el proceso termina con
+# código 1 (pasó en GitHub con «515 passed»). Por eso, en Windows, una vez impreso
+# el resumen se sale directamente con el resultado real de pytest.
+_resultado_pytest: int | None = None
+
+
+def pytest_sessionfinish(session, exitstatus):
+    global _resultado_pytest
+    _resultado_pytest = int(exitstatus)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config):
+    import os
+    import sys
+
+    if sys.platform == "win32" and _resultado_pytest is not None and "PySide6" in sys.modules:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(_resultado_pytest)
+
+
 @pytest.fixture(autouse=True)
 def _clave_admin_simulada(request, monkeypatch):
     """Pagos e inscripciones de Recepción necesitan la clave de un administrador.

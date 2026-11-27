@@ -1,5 +1,13 @@
 # Progreso
 
+## Arreglos tras probar el instalador en un portátil ✅ (27/11/2026)
+- **Pantallas cortadas:** la ventana principal pedía un mínimo de casi 2.000 px de ancho (las filas de botones y filtros de Casilleros, Configuración, Asistencia y Pagos), así que en un portátil o con escalado de Windows quedaba "mocha". Ahora cada pantalla del menú va dentro de un área con barras de desplazamiento (`PilaPantallas` en `ui/comunes.py`; `currentWidget()` sigue devolviendo la pantalla), la ventana se ajusta al área disponible y todo diálogo que no quepa se reduce y se mueve dentro de la pantalla (`FiltroAjusteDialogos`, instalado en la aplicación). Mínimo de la ventana con todos los módulos: 566 × 181. Recepción: textos de la tarjeta con salto de línea y panel lateral flexible (300–520 px).
+- **F2 / Renovar en Recepción:** antes solo funcionaba con tarjeta roja. Ahora renueva al cliente activo que esté en la tarjeta (también por adelantado; tras guardar se ve la nueva vigencia sin registrar otro ingreso). Sin cliente, un aviso explica qué hacer.
+- **Pago desde la ficha:** el usuario cobró con "Registrar otro pago…" (concepto Otro), que no toca la vigencia. La pestaña Pagos ahora tiene **Pagar mensualidad…** (abre Renovar membresía) y **Otro concepto (no es mensualidad)…**, cuyo diálogo avisa que no cambia la vigencia. El recibo de otro concepto dice la vigencia actual (`DatosRecibo.vigente_hasta`).
+- **Recibo:** 10 cm de alto (ancho de media carta), solo el logo en el encabezado (el nombre en texto solo si no hay logo), código y documento en un renglón, valor de la membresía y saldo a la derecha del total. Si un recibo no cabe (muchos conceptos), la hoja crece lo justo.
+- **Planes:** con datos importados no había planes activos (solo «Programa anterior», inactivo) y Renovar no dejaba cobrar. Al arrancar, si no hay ningún plan activo para vender, se crean o activan Mensual (30), Quincena (15), Trimestre (90), Semestre (180), Año (365) y Semana (7) con **precio $1** (decisión del gimnasio: importa qué plan eligió). Un plan a $0 no se puede vender y el diálogo lo dice. Se probó que renovar sobre una membresía del programa anterior empieza el día siguiente a su fin.
+- Pruebas nuevas: `tests/test_ui_pantallas_pequenas.py` y casos en `test_pagos.py` y `test_ui_recepcion.py`.
+
 ## Fase 10 — Importar datos del programa anterior ✅ (26/11/2026)
 
 ### Qué se encontró
@@ -415,7 +423,7 @@ La consulta de 30 días tardaba ~410 ms ordenando por hora; ordenar primero por 
 
 ### Qué se hizo
 - **Migración `0004`**: las membresías guardan motivo, usuario y fecha de anulación (con CHECK que exige el motivo) e índice `ix_pagos_membresia_id` para calcular saldos. Las anuladas previas sin motivo reciben uno genérico.
-- **`servicios/planes.py`**: crear, editar y activar/desactivar planes (solo admin, auditado). No se borran. Nombre único sin importar tildes ni mayúsculas. Editar precio o duración no toca las membresías ya registradas. Al arrancar, si la base no tiene planes, se crean Mensual (30), Quincenal (15), Trimestral (90) y Día (1) **inactivos y con precio $ 0**: el admin pone el precio y los activa.
+- **`servicios/planes.py`**: crear, editar y activar/desactivar planes (solo admin, auditado). No se borran. Nombre único sin importar tildes ni mayúsculas. Editar precio o duración no toca las membresías ya registradas. Al arrancar, si no hay planes activos para vender, se preparan los planes del gimnasio (ver «Arreglos tras probar el instalador», 27/11/2026).
 - **`servicios/pagos.py`**:
   - RN-03: `fecha_fin = inicio + días − 1`. RN-04: si el cliente sigue vigente la renovación inicia el día siguiente a su fin; si venció, hoy o la fecha elegida. Nuevo parámetro `renovacion_anticipada` (día siguiente / hoy).
   - Renovación rápida (`proponer_membresia`): último plan del cliente si sigue activo, fecha de inicio, fin y precio.
