@@ -144,6 +144,14 @@ def test_pagar_mensualidad_con_plan_con_precio(qapp, servicios, admin, cliente):
     d.close()
 
 
+def _anchos(pantalla):
+    """Para el mensaje de error: qué controles piden más ancho."""
+    return sorted(((w.minimumSizeHint().width(), type(w).__name__, w.objectName(),
+                    getattr(w, "text", lambda: "")() if hasattr(w, "text") else "")
+                   for w in pantalla.findChildren(QtWidgets.QWidget)
+                   if w.minimumSizeHint().width() > 150), reverse=True)[:15]
+
+
 def test_ningun_modulo_queda_cortado_en_un_portatil(qapp, servicios, admin):
     """1366 × 768 con escalado al 125 %: cada módulo (y cada pestaña) cabe en el espacio
     que deja el menú, sin barra horizontal; los botones del final se ven."""
@@ -158,7 +166,8 @@ def test_ningun_modulo_queda_cortado_en_un_portatil(qapp, servicios, admin):
         area = v.pantallas.currentWidget().parentWidget().parentWidget()
         assert isinstance(area, QtWidgets.QScrollArea)
         visible = area.viewport().size()
-        assert pantalla.minimumSizeHint().width() <= 1093 - 210, (clave, pantalla.minimumSizeHint())
+        assert pantalla.minimumSizeHint().width() <= 1093 - 210, (
+            clave, pantalla.minimumSizeHint(), _anchos(pantalla))
         # La pantalla ocupa exactamente lo visible: nada queda escondido a la derecha.
         assert pantalla.width() == visible.width(), (clave, pantalla.size(), visible)
         assert not area.horizontalScrollBar().isVisible(), clave
