@@ -280,3 +280,55 @@ def test_inscripcion_pide_la_clave_una_sola_vez(qapp, servicios, recepcion, plan
     for d in vistos:
         d.setParent(None)
     vistos.clear()
+
+
+def test_pagos_bloqueado_tambien_para_el_administrador(qapp, servicios, admin, monkeypatch):
+    """Pagos no queda a la vista de cualquiera: el administrador también escribe la clave
+    al entrar, y al salir se vuelve a bloquear."""
+    import gimnasio.ui.autorizacion as ua
+    from gimnasio.ui.pagos import PantallaPagos
+
+    pedidas = []
+    respuesta = [False]
+
+    def pedir(_p, s, actual, para):
+        pedidas.append(para)
+        if not respuesta[0]:
+            return False, None
+        return True, s.autorizaciones.autorizar(actual, "admin", CLAVE_PRUEBA, para)
+
+    monkeypatch.setattr(ua, "PEDIR", pedir)
+    p = PantallaPagos(servicios, admin)
+    assert not p.desbloqueado and p.panel_bloqueado.isVisibleTo(p)
+    assert not p.desbloquear() and p.cierre is None and pedidas == ["modulo_pagos"]
+    respuesta[0] = True
+    assert p.desbloquear() and p.cierre is not None
+    p.bloquear()
+    assert not p.desbloqueado and not p.pestanas.isVisibleTo(p)
+
+
+def test_ficha_muestra_los_pagos_solo_con_clave(qapp, servicios, admin, recepcion, plan,
+                                                monkeypatch):
+    import gimnasio.ui.autorizacion as ua
+    from gimnasio.servicios.clientes import DatosCliente
+    from gimnasio.servicios.pagos import DatosPago
+    from gimnasio.ui.cliente_ficha import DialogoFicha
+
+    c = servicios.clientes.registrar(admin, DatosCliente(
+        tipo_documento="CC", documento="9988776655", nombres="Luis", apellidos="Mora",
+        sexo="M"))
+    servicios.pagos.registrar_membresia(admin, c.id, plan.id, pago=DatosPago(plan.precio))
+    for actual in (admin, recepcion):
+        respuesta = [False]
+        monkeypatch.setattr(ua, "PEDIR", lambda _p, s, a, para: (
+            (True, s.autorizaciones.autorizar(a, "admin", CLAVE_PRUEBA, para))
+            if respuesta[0] else (False, None)))
+        f = DialogoFicha(servicios, actual, c.id)
+        assert f._pila_pagos.currentWidget() is not f._pestana_pagos_real
+        assert not f.desbloquear_pagos()
+        respuesta[0] = True
+        assert f.desbloquear_pagos()
+        assert f._pila_pagos.currentWidget() is f._pestana_pagos_real
+        f.cargar()  # tras registrar algo, sigue desbloqueada en esta ficha
+        assert f._pila_pagos.currentWidget() is f._pestana_pagos_real
+        f.close()

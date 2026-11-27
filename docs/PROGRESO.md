@@ -1,5 +1,10 @@
 # Progreso
 
+## Pagos solo con clave, también para el administrador ✅ (27/11/2026)
+- Pedido del dueño: «que el menú de pagos solo se acceda con clave, que no sea visible a cualquiera». El módulo Pagos ahora arranca bloqueado para todos y pide usuario y clave de un administrador cada vez que se entra (`pedir_clave_siempre`); al salir se vuelve a bloquear.
+- En la ficha del cliente, la pestaña Pagos muestra un candado hasta que se escribe la clave (vale mientras esa ficha esté abierta).
+- Decisión: para el administrador es un bloqueo de pantalla (cuida la sesión abierta); los servicios siguen exigiendo la autorización solo a Recepción, así los reportes del administrador no cambian.
+
 ## Arreglos tras probar el instalador en un portátil ✅ (27/11/2026)
 - **Pantallas cortadas:** la ventana principal pedía un mínimo de casi 2.000 px de ancho (las filas de botones y filtros de Casilleros, Configuración, Asistencia y Pagos), así que en un portátil o con escalado de Windows quedaba "mocha". Ahora cada pantalla del menú va dentro de un área con barras de desplazamiento (`PilaPantallas` en `ui/comunes.py`; `currentWidget()` sigue devolviendo la pantalla), la ventana se ajusta al área disponible y todo diálogo que no quepa se reduce y se mueve dentro de la pantalla (`FiltroAjusteDialogos`, instalado en la aplicación). Mínimo de la ventana con todos los módulos: 566 × 181. Recepción: textos de la tarjeta con salto de línea y panel lateral flexible (300–520 px).
 - **F2 / Renovar en Recepción:** antes solo funcionaba con tarjeta roja. Ahora renueva al cliente activo que esté en la tarjeta (también por adelantado; tras guardar se ve la nueva vigencia sin registrar otro ingreso). Sin cliente, un aviso explica qué hacer.

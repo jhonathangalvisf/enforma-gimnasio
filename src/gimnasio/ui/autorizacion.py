@@ -1,6 +1,7 @@
 """Ventana para que un administrador escriba su clave y autorice a Recepción a cobrar,
-inscribir o abrir el módulo de Pagos (se pide cada vez). El administrador no la ve:
-si quien trabaja es administrador, `pedir_autorizacion` no pregunta nada."""
+inscribir o abrir el módulo de Pagos (se pide cada vez). Para cobrar o inscribir, el
+administrador no la ve (`pedir_autorizacion`); para ver los pagos se pide a todos
+(`pedir_clave_siempre`)."""
 
 from __future__ import annotations
 
@@ -70,6 +71,14 @@ def pedir_autorizacion(padre: QWidget | None, servicios: Servicios, actual: Usua
     Si Recepción cancela: (False, None)."""
     if not necesita_autorizacion(actual):
         return True, None
+    return PEDIR(padre, servicios, actual, para)
+
+
+def pedir_clave_siempre(padre: QWidget | None, servicios: Servicios, actual: UsuarioActual,
+                        para: str) -> tuple[bool, Autorizacion | None]:
+    """Como `pedir_autorizacion`, pero pregunta también al administrador (para abrir lo
+    que no debe quedar a la vista de cualquiera, como los pagos). Para un administrador
+    los servicios no exigen el permiso devuelto: la clave cuida la sesión abierta."""
     return PEDIR(padre, servicios, actual, para)
 
 

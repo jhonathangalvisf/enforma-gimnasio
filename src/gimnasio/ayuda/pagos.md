@@ -12,6 +12,11 @@ Recepción solo puede cobrar con la **clave de un administrador**, y se pide **c
 - Al **inscribir un cliente nuevo**. La misma clave sirve para cobrar la mensualidad de esa inscripción (y el casillero, si lo pidió): no se pide dos veces.
 - Al **abrir el módulo Pagos**. Mientras la pantalla esté abierta se puede ver la caja y consultar; al salir del módulo se vuelve a bloquear.
 
+**Ver los pagos pide la clave a todos, también al administrador**, para que no queden a la vista de cualquiera que pase frente al computador:
+
+- Al entrar al **módulo Pagos** (se vuelve a bloquear al salir).
+- En la **ficha del cliente**, la pestaña **Pagos** aparece con un candado: pulse **Ver pagos con clave de administrador…** (vale mientras esa ficha esté abierta).
+
 Aparece una ventana donde el administrador escribe su **usuario y contraseña**. Si se equivoca, cuenta para el bloqueo igual que al iniciar sesión. Si el cobro falla por otro motivo (por ejemplo falta la referencia), al corregirlo no se vuelve a pedir la clave. Cada cobro queda en la auditoría con el administrador que lo autorizó.
 
 Si quien trabaja es administrador, no se le pide nada.
