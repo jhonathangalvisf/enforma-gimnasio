@@ -31,6 +31,9 @@ def _salir_con(resultado: int) -> None:
 def pytest_sessionfinish(session, exitstatus):
     # Envuelve a los demás: lo de después del `yield` corre cuando ya se imprimió el resumen.
     yield
+    import sys
+    print(f"\n[diagnóstico] fin de la sesión: exitstatus={session.exitstatus!r} "
+          f"testsfailed={session.testsfailed}", file=sys.__stderr__, flush=True)
     _salir_con(int(session.exitstatus))
 
 
