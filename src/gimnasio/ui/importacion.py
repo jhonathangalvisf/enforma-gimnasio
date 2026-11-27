@@ -18,12 +18,13 @@ from PySide6.QtWidgets import (
 from gimnasio.formato import fecha_hora_local
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.errores import ErrorNegocio
-from gimnasio.servicios.importacion import ResultadoImportacion
+from gimnasio.servicios.importacion import ResultadoImportacion, limpiar_ruta
 from gimnasio.servicios.permisos import UsuarioActual
 from gimnasio.ui.comunes import boton, confirmar, etiqueta, mostrar_error
 
 TEXTO_AYUDA = (
-    "Elija la carpeta DB3 del programa anterior (la que tiene ENCLIE.DBF). La carpeta "
+    "Pulse «Elegir carpeta…» y busque la carpeta DB3 del programa anterior (la que tiene "
+    "ENCLIE.DBF), o pegue su ruta. La carpeta "
     "original no se modifica: se copia y se lee la copia.\n"
     "1. Pulse «Probar sin guardar» y revise el informe en Excel (hoja «Problemas»).\n"
     "2. Si todo está bien, pulse «Importar de verdad». Antes se hace una copia de "
@@ -38,13 +39,16 @@ class PestanaImportacion(QWidget):
         self.resultado: ResultadoImportacion | None = None
         capa = QVBoxLayout(self)
         capa.addWidget(etiqueta(TEXTO_AYUDA))
+        # El botón va primero para que siempre se vea, aunque la ventana sea angosta.
         fila = QHBoxLayout()
-        self.campo_carpeta = QLineEdit()
-        self.campo_carpeta.setPlaceholderText("Carpeta DB3 del programa anterior")
         self.boton_elegir = boton("Elegir carpeta…")
         self.boton_elegir.clicked.connect(self.elegir_carpeta)
-        fila.addWidget(self.campo_carpeta, 1)
+        self.campo_carpeta = QLineEdit()
+        self.campo_carpeta.setPlaceholderText(
+            "O pegue aquí la ruta de la carpeta DB3 (con o sin comillas)")
+        self.campo_carpeta.editingFinished.connect(self._limpiar_campo)
         fila.addWidget(self.boton_elegir)
+        fila.addWidget(self.campo_carpeta, 1)
         capa.addLayout(fila)
         botones = QHBoxLayout()
         self.boton_probar = boton("Probar sin guardar", principal=True)
@@ -81,10 +85,19 @@ class PestanaImportacion(QWidget):
         if carpeta:
             self.campo_carpeta.setText(carpeta)
 
+    def _limpiar_campo(self) -> None:
+        texto = self.campo_carpeta.text()
+        if texto.strip():
+            limpio = str(limpiar_ruta(texto))
+            if limpio != texto:
+                self.campo_carpeta.setText(limpio)
+
     def _carpeta(self) -> Path | None:
+        self._limpiar_campo()
         texto = self.campo_carpeta.text().strip()
         if not texto:
-            mostrar_error(self, ErrorNegocio("Elija la carpeta DB3 del programa anterior."))
+            mostrar_error(self, ErrorNegocio("Pulse «Elegir carpeta…» y busque la carpeta DB3 "
+                                             "del programa anterior."))
             return None
         return Path(texto)
 

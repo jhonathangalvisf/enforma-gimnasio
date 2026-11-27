@@ -85,6 +85,21 @@ class ResultadoImportacion:
         return "\n".join(f"{a}: {b}" for a, b in self.lineas_resumen())
 
 
+def limpiar_ruta(texto: Path | str) -> Path:
+    """Ruta escrita o pegada por el usuario, sin comillas ni espacios de más.
+
+    Windows «Copiar como ruta» la pega entre comillas ("C:\\...\\DB3"). Si pegan la
+    ruta de un archivo de la carpeta (por ejemplo ENCLIE.DBF), se usa su carpeta.
+    """
+    limpio = str(texto or "").strip()
+    while len(limpio) >= 2 and limpio[0] in "\"'“”‘’" and limpio[-1] in "\"'“”‘’":
+        limpio = limpio[1:-1].strip()
+    ruta = Path(limpio) if limpio else Path()
+    if limpio and ruta.is_file():
+        ruta = ruta.parent
+    return ruta
+
+
 def _utc(dia: date, hora: int) -> datetime:
     return datetime.combine(dia, time(hora), tzinfo=cfg.ZONA_HORARIA).astimezone(timezone.utc)
 
@@ -122,6 +137,9 @@ class ServicioImportacion:
                  guardar: bool = False) -> ResultadoImportacion:
         """Lee la carpeta DB3 y la importa (o solo la prueba, si `guardar` es False)."""
         exigir(actual, Permiso.IMPORTAR_DATOS)
+        carpeta = limpiar_ruta(carpeta)
+        if not str(carpeta) or str(carpeta) == ".":
+            raise ErrorValidacion("Elija la carpeta DB3 del programa anterior.")
         ahora = self._reloj()
         with self._fabrica() as sesion:
             usuario_vigente(sesion, actual)
@@ -131,8 +149,11 @@ class ServicioImportacion:
                 f"Los datos del programa anterior ya se importaron el "
                 f"{fecha_hora_local(anterior)}. No se pueden importar dos veces."
             )
+        if not carpeta.is_dir():
+            raise ErrorValidacion(
+                f"No se encontró la carpeta «{carpeta}». Pulse «Elegir carpeta…» y búsquela.")
         trabajo = self._carpeta_trabajo(ahora)
-        origen = self._copiar_origen(Path(carpeta), trabajo / "origen")
+        origen = self._copiar_origen(carpeta, trabajo / "origen")
         try:
             datos = pa.leer_carpeta(origen, self.hoy())
         except pa.ErrorCarpeta as e:
@@ -183,7 +204,8 @@ class ServicioImportacion:
     def _copiar_origen(carpeta: Path, destino: Path) -> Path:
         """Copia solo los .DBF que se usan: la carpeta original no se toca."""
         if not carpeta.is_dir():
-            raise ErrorValidacion("La carpeta elegida no existe.")
+            raise ErrorValidacion(
+                f"No se encontró la carpeta «{carpeta}». Pulse «Elegir carpeta…» y búsquela.")
         destino.mkdir(parents=True)
         from gimnasio.importacion.dbf import buscar_archivo
 
@@ -430,4 +452,5 @@ class ServicioImportacion:
         return ruta
 
 
-__all__ = ["ServicioImportacion", "ResultadoImportacion", "CLAVE_IMPORTADO", "NOMBRE_PLAN"]
+__all__ = ["ServicioImportacion", "ResultadoImportacion", "CLAVE_IMPORTADO", "NOMBRE_PLAN",
+           "limpiar_ruta"]

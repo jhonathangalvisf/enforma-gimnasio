@@ -23,6 +23,10 @@ El programa actual es un desarrollo propio en **dBase III** (MS-DOS, desde 1999)
 - Se importan todos los casilleros ocupados con su fecha (los vencidos salen en «Sugeridos para liberar»).
 - Excepción a RN-10: `visitas_anteriores` es un número fijo histórico, no un contador.
 
+### Corrección (27/11/2026, probando en el PC del dueño)
+- El botón **Elegir carpeta…** quedaba fuera de la vista a la derecha del campo: ahora va a la izquierda.
+- Una ruta pegada con «Copiar como ruta» de Windows (entre comillas) daba «la carpeta no existe»: `limpiar_ruta` quita comillas y espacios, y si pegan la ruta de un archivo usa su carpeta. 3 pruebas más.
+
 ### Pendientes
 - En el PC del gimnasio: configurar la contraseña de las copias, **Probar sin guardar**, revisar la hoja Problemas e **Importar de verdad** una vez instalado el programa (Fase 11).
 - Después de importar: completar los ~890 clientes «Sin documento» a medida que vengan y revisar los ~160 documentos repetidos. Muchos clientes figuran activos pero vencidos (el programa viejo no los inactivaba).
