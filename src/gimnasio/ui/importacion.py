@@ -46,7 +46,9 @@ class PestanaImportacion(QWidget):
         self.campo_carpeta = QLineEdit()
         self.campo_carpeta.setPlaceholderText(
             "O pegue aquí la ruta de la carpeta DB3 (con o sin comillas)")
-        self.campo_carpeta.editingFinished.connect(self._limpiar_campo)
+        # La ruta se limpia al pulsar Probar/Importar. No se conecta a editingFinished:
+        # esa señal también se emite al destruir la ventana (pérdida de foco) y en
+        # Windows hacía fallar el cierre del programa en las pruebas.
         fila.addWidget(self.boton_elegir)
         fila.addWidget(self.campo_carpeta, 1)
         capa.addLayout(fila)
