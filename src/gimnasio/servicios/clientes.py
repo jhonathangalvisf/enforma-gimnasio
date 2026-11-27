@@ -33,6 +33,7 @@ from gimnasio.servicios.auditoria import inicio_dia_utc
 from gimnasio.servicios.autorizaciones import (
     PARA_ACTIVACION, PARA_INSCRIPCION, Autorizacion, ServicioAutorizaciones, registrar_uso,
 )
+from gimnasio.servicios.autorizaciones import PARA_MODULO_CLIENTES
 from gimnasio.servicios.configuracion import ServicioConfiguracion
 from gimnasio.servicios.errores import ErrorPermiso, ErrorValidacion
 from gimnasio.servicios.pagos import saldos_por_membresia
@@ -638,9 +639,12 @@ class ServicioClientes:
             sesion.commit()
             return nueva_fecha_fin
 
-    def resumen(self, actual: UsuarioActual) -> ResumenClientes:
-        """Cuántos clientes están al día, por vencer, vencidos, sin membresía e inactivos."""
+    def resumen(self, actual: UsuarioActual,
+                autorizacion: Autorizacion | None = None) -> ResumenClientes:
+        """Cuántos clientes están al día, por vencer, vencidos, sin membresía e inactivos.
+        Recepción necesita la autorización del módulo Clientes ("modulo_clientes")."""
         exigir(actual, Permiso.VER_CLIENTES)
+        self._autorizaciones.verificar(actual, autorizacion, PARA_MODULO_CLIENTES)
         hoy = self.hoy()
         limite = hoy + timedelta(days=self._configuracion.obtener("dias_por_vencer"))
         fin = _Expresiones().fin
@@ -935,9 +939,18 @@ class ServicioClientes:
         descendente: bool = False,
         desde: int = 0,
         limite: int | None = 200,
+        autorizacion: Autorizacion | None = None,
     ) -> PaginaClientes:
-        """Lista de clientes filtrada y ordenada, por páginas (`desde`, `limite`)."""
+        """Lista de clientes filtrada y ordenada, por páginas (`desde`, `limite`).
+        Es la lista del módulo Clientes: Recepción necesita la autorización de un
+        administrador ("modulo_clientes"); el administrador escribe la clave en la pantalla."""
         exigir(actual, Permiso.VER_CLIENTES)
+        self._autorizaciones.verificar(actual, autorizacion, PARA_MODULO_CLIENTES)
+        return self._buscar(filtros, orden, descendente, desde, limite)
+
+    def _buscar(self, filtros: FiltrosClientes, orden: str, descendente: bool, desde: int,
+                limite: int | None) -> PaginaClientes:
+        """La consulta de `buscar`, sin permisos (los revisa quien la llama)."""
         hoy = self.hoy()
         dias_por_vencer = self._configuracion.obtener("dias_por_vencer")
         expr = _Expresiones()
@@ -988,7 +1001,9 @@ class ServicioClientes:
             exacto = sesion.scalar(select(Cliente.id).where(condicion))
         if exacto:
             return self._filas_por_ids([exacto])
-        return self.buscar(actual, FiltrosClientes(texto=texto), limite=limite).filas
+        # Sirve también a Recepción (búsqueda manual, invitados, casilleros): no pide la
+        # clave del módulo Clientes; la barra superior (Ctrl+K) la pide en la pantalla.
+        return self._buscar(FiltrosClientes(texto=texto), "apellidos", False, 0, limite).filas
 
     def _filas_por_ids(self, ids: list[int]) -> list[FilaCliente]:
         hoy = self.hoy()

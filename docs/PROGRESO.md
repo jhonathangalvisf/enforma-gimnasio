@@ -1,5 +1,13 @@
 # Progreso
 
+## Clientes solo con clave, también para el administrador ✅ (27/11/2026)
+- Pedido del dueño: «la pestaña de clientes tiene información confidencial, prefiero tenerla bajo uso con clave». Elegido: pedirla **cada vez que se entra**, igual que Pagos.
+- El módulo Clientes arranca con un candado para todos; pide usuario y clave de un administrador (`PARA_MODULO_CLIENTES`, vale 12 h o hasta salir) y al salir se bloquea, se olvida la autorización y se borra la lista. Mientras está bloqueado no se consulta nada (tampoco al ordenar ni con Ctrl+N / Ctrl+F).
+- La regla también está en el servicio: `clientes.buscar` y `clientes.resumen` exigen esa autorización a Recepción. Para el administrador es un bloqueo de pantalla (como en Pagos).
+- La búsqueda Ctrl+K de la barra superior pide la clave cada vez (salvo dentro de Clientes ya desbloqueado); la autorización se revoca tras buscar.
+- Decisión: Recepción no cambia. `buscar_rapido` (búsqueda manual de Recepción, invitados, casilleros, pagos) y la ficha con F4 siguen sin clave nueva, para no agregar pasos a los recepcionistas.
+- `scripts/medir_pantallas.py` da la clave por escrita también para Clientes. Medido con 12.000 clientes: Clientes abre en ~110 ms.
+
 ## Recepción más sencilla y solo pagos completos ✅ (27/11/2026)
 Pedido del dueño (la usarán personas mayores): Recepción lo más directa posible.
 - **Sin lista lateral:** se quitó el historial de ingresos de hoy del lado derecho; la tarjeta ocupa todo el ancho. Queda solo "Hoy: N asistentes" arriba a la derecha. La lista está en Asistencia.

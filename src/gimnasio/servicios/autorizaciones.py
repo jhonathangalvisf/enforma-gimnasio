@@ -15,7 +15,10 @@ Cómo funciona:
    - "activacion": activar a un cliente inactivo desde Recepción y cobrarle la
      mensualidad (2 usos).
    - "modulo_pagos": ver la caja y consultar pagos mientras la pantalla esté abierta.
-3. Cada servicio protegido llama a `verificar` antes de guardar y a `gastar` después
+3. También el módulo Clientes (datos confidenciales) pide la clave cada vez que se entra,
+   al administrador incluido ("modulo_clientes": la lista y los contadores mientras la
+   pantalla esté abierta). La búsqueda Ctrl+K de la barra superior también la pide.
+4. Cada servicio protegido llama a `verificar` antes de guardar y a `gastar` después
    de confirmar la transacción: si la operación falla (p. ej. falta la referencia)
    la autorización sigue sirviendo y no hay que volver a pedir la clave.
 
@@ -37,11 +40,13 @@ from gimnasio.servicios.errores import ErrorPermiso
 from gimnasio.servicios.permisos import ROL_ADMIN, UsuarioActual
 from gimnasio.servicios.sesion import Reloj, ServicioSesion, usuario_vigente
 
+PARA_MODULO_CLIENTES = "modulo_clientes"
 PARA_PAGO = "pago"
 PARA_INSCRIPCION = "inscripcion"
 PARA_MODULO_PAGOS = "modulo_pagos"
 PARA_ACTIVACION = "activacion"
 DESCRIPCIONES = {
+    PARA_MODULO_CLIENTES: "abrir el módulo de Clientes",
     PARA_PAGO: "registrar un pago",
     PARA_INSCRIPCION: "inscribir un cliente nuevo",
     PARA_MODULO_PAGOS: "abrir el módulo de Pagos",
@@ -49,6 +54,7 @@ DESCRIPCIONES = {
 }
 # (duración, usos; None = sin límite de usos mientras no venza ni se revoque)
 _REGLAS: dict[str, tuple[timedelta, int | None]] = {
+    PARA_MODULO_CLIENTES: (timedelta(hours=12), None),
     PARA_PAGO: (timedelta(minutes=10), 1),
     PARA_INSCRIPCION: (timedelta(minutes=20), 2),
     PARA_MODULO_PAGOS: (timedelta(hours=12), None),

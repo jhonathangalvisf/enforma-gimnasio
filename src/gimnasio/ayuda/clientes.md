@@ -2,6 +2,14 @@
 
 En este módulo se registran los clientes del gimnasio, se buscan y se consulta toda su información en la **ficha del cliente**.
 
+## Entrar con clave
+
+Los datos de los clientes son confidenciales. Por eso, **cada vez que se entra** al módulo Clientes aparece un candado 🔒 y se pide el **usuario y la contraseña de un administrador** (también al administrador). Al ir a otro módulo, Clientes se vuelve a cerrar. Si cerró la ventana de la clave sin querer, pulse **Desbloquear con clave de administrador…**.
+
+El buscador de la barra superior (**Ctrl+K**) también pide la clave, porque muestra clientes desde cualquier pantalla (dentro de Clientes, ya abierto, no la vuelve a pedir).
+
+En **Recepción** no cambia nada: al pasar el código se ve el cliente y su ficha con **F4** sin clave nueva.
+
 ## Cuántos clientes están al día
 
 Arriba de la lista hay una barra con los totales: **Al día** (vigentes y por vencer, es decir, con plan que no ha vencido), **Por vencer**, **Vencidos**, **Sin membresía**, **Inactivos** y el **Total**. Pulse cualquiera de ellos para ver solo esos clientes en la lista. Los totales se actualizan al registrar, modificar o renovar.

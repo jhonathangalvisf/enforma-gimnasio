@@ -68,6 +68,7 @@ def test_lista_busca_filtra_y_carga_por_paginas(qapp, servicios, admin):
             documento=f"{50_000_000 + i}", nombres=f"Persona{i}", apellidos="Prueba",
             sexo="M" if i % 2 else "F", telefonos=[], correos=[], emergencias=[]))
     p = PantallaClientes(servicios, admin)
+    assert p.desbloquear()
     assert p.modelo.total == TAMANO_PAGINA + 30
     assert p.modelo.rowCount() == TAMANO_PAGINA  # carga virtual
     assert p.modelo.canFetchMore()
@@ -89,6 +90,7 @@ def test_orden_por_columna_en_la_base(qapp, servicios, admin):
     for doc, apellido in (("111111", "Zuluaga"), ("222222", "Arias")):
         servicios.clientes.registrar(admin, datos(documento=doc, apellidos=apellido))
     p = PantallaClientes(servicios, admin)
+    assert p.desbloquear()
     assert p.modelo.filas[0].apellidos == "Arias"
     p.tabla.sortByColumn(0, Qt.SortOrder.DescendingOrder)  # código
     assert p.modelo.orden == "codigo" and p.modelo.filas[0].codigo == "000002"
@@ -98,6 +100,7 @@ def test_exportar_solo_admin(qapp, servicios, admin, recepcion, tmp_path):
     servicios.clientes.registrar(admin, datos())
     assert PantallaClientes(servicios, recepcion).boton_excel is None
     p = PantallaClientes(servicios, admin)
+    assert p.desbloquear()
     assert p.exportar("xlsx", str(tmp_path / "lista.xlsx")) == 1
     assert (tmp_path / "lista.xlsx").exists()
 
@@ -236,6 +239,7 @@ def test_resumen_al_dia_filtra_la_lista(qapp, servicios, admin, motor):
     servicios.clientes.registrar(admin, datos(documento="99887766"))
     membresia(fabrica, a.id, HOY, HOY + timedelta(days=29))
     p = PantallaClientes(servicios, admin)
+    assert p.desbloquear()
     assert p.botones_resumen["al_dia"].text() == "✔ Al día: 1"
     assert p.botones_resumen["sin_membresia"].text() == "— Sin membresía: 1"
     p.botones_resumen["al_dia"].click()

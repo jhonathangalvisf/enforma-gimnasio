@@ -1,4 +1,4 @@
-"""Pagos, inscripciones y módulo de Pagos de Recepción solo con la clave de un
+"""Pagos, inscripciones, módulo de Pagos y módulo de Clientes solo con la clave de un
 administrador, cada vez (decisión del dueño). Estas pruebas usan la clave de verdad."""
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ from sqlalchemy import select
 from gimnasio.db.engine import crear_fabrica_sesiones
 from gimnasio.modelos import Auditoria, Cliente, Membresia, Pago
 from gimnasio.servicios.autorizaciones import (
-    PARA_ACTIVACION, PARA_INSCRIPCION, PARA_MODULO_PAGOS, PARA_PAGO, ErrorAutorizacion,
+    PARA_ACTIVACION, PARA_INSCRIPCION, PARA_MODULO_CLIENTES, PARA_MODULO_PAGOS, PARA_PAGO,
+    ErrorAutorizacion,
 )
 from gimnasio.servicios.casilleros import CasilleroEnRecibo
 from gimnasio.servicios.errores import ErrorAutenticacion, ErrorPermiso, ErrorValidacion
@@ -333,6 +334,101 @@ def test_ficha_muestra_los_pagos_solo_con_clave(qapp, servicios, admin, recepcio
         f.cargar()  # tras registrar algo, sigue desbloqueada en esta ficha
         assert f._pila_pagos.currentWidget() is f._pestana_pagos_real
         f.close()
+
+
+# --- módulo Clientes (datos confidenciales) -----------------------------------------
+
+def test_lista_de_clientes_de_recepcion_necesita_la_clave(servicios, recepcion, cliente):
+    """La regla está en el servicio, no solo en la pantalla."""
+    for consulta in (lambda a: servicios.clientes.buscar(recepcion, autorizacion=a),
+                     lambda a: servicios.clientes.resumen(recepcion, a)):
+        with pytest.raises(ErrorAutorizacion, match="módulo de Clientes"):
+            consulta(None)
+        with pytest.raises(ErrorAutorizacion):  # la de otro módulo no sirve
+            consulta(clave(servicios, recepcion, PARA_MODULO_PAGOS))
+    aut = clave(servicios, recepcion, PARA_MODULO_CLIENTES)
+    assert servicios.clientes.buscar(recepcion, autorizacion=aut).total == 1
+    assert servicios.clientes.buscar(recepcion, autorizacion=aut).total == 1  # sin límite de usos
+    assert servicios.clientes.resumen(recepcion, aut).total == 1
+    servicios.autorizaciones.revocar(aut)
+    with pytest.raises(ErrorAutorizacion):
+        servicios.clientes.buscar(recepcion, autorizacion=aut)
+    # Ver la ficha del cliente que pasa por Recepción (F4) y buscarlo no cambian.
+    assert servicios.clientes.obtener_ficha(recepcion, cliente).id == cliente
+    ficha = servicios.clientes.obtener_ficha(recepcion, cliente)
+    assert [f.id for f in servicios.clientes.buscar_rapido(recepcion, ficha.codigo)] == [cliente]
+    assert [f.id for f in servicios.clientes.buscar_rapido(recepcion, ficha.documento)] == [cliente]
+
+
+@pytest.mark.parametrize("rol", ["admin", "recepcion"])
+def test_clientes_bloqueado_tambien_para_el_administrador(qapp, servicios, admin, recepcion,
+                                                         cliente, monkeypatch, rol):
+    """Al entrar al módulo se pide la clave a todos; mientras tanto no se consulta ni se
+    muestra nada, y al salir se vuelve a bloquear y se borra la lista."""
+    import gimnasio.ui.autorizacion as ua
+    from gimnasio.ui.clientes import PantallaClientes
+
+    actual = admin if rol == "admin" else recepcion
+    pedidas = []
+    respuesta = [False]
+
+    def pedir(_p, s, a, para):
+        pedidas.append(para)
+        if not respuesta[0]:
+            return False, None
+        return True, s.autorizaciones.autorizar(a, "admin", CLAVE_PRUEBA, para)
+
+    monkeypatch.setattr(ua, "PEDIR", pedir)
+    p = PantallaClientes(servicios, actual)
+    assert not p.desbloqueado and p.panel_bloqueado.isVisibleTo(p)
+    assert not p.contenido.isVisibleTo(p) and p.modelo.rowCount() == 0
+    assert all(b.text() == "" for b in p.botones_resumen.values())
+    assert not p.desbloquear() and p.modelo.rowCount() == 0
+    assert pedidas == [PARA_MODULO_CLIENTES]
+    respuesta[0] = True
+    assert p.desbloquear() and p.contenido.isVisibleTo(p)
+    assert p.modelo.rowCount() == 1 and p.botones_resumen["total"].text() == "Total: 1"
+    aut = p.autorizacion
+    p.bloquear()  # al salir del módulo
+    assert not p.desbloqueado and p.autorizacion is None and p.modelo.rowCount() == 0
+    assert p.panel_bloqueado.isVisibleTo(p) and not p.contenido.isVisibleTo(p)
+    p.recargar()  # p. ej. tras cerrar una ficha: sigue bloqueada
+    assert p.modelo.rowCount() == 0
+    if rol == "recepcion":
+        with pytest.raises(ErrorAutorizacion):
+            servicios.clientes.buscar(recepcion, autorizacion=aut)
+    assert p.desbloquear() and pedidas.count(PARA_MODULO_CLIENTES) == 3  # otra vez la clave
+
+
+def test_busqueda_ctrl_k_pide_la_clave(qapp, servicios, admin, cliente, monkeypatch):
+    import gimnasio.ui.autorizacion as ua
+    from gimnasio.ui.ventana_principal import VentanaPrincipal
+
+    pedidas = []
+    respuesta = [False]
+
+    def pedir(_p, s, a, para):
+        pedidas.append(para)
+        if not respuesta[0]:
+            return False, None
+        return True, s.autorizaciones.autorizar(a, "admin", CLAVE_PRUEBA, para)
+
+    monkeypatch.setattr(ua, "PEDIR", pedir)
+    v = VentanaPrincipal(servicios, admin)
+    abiertas = []
+    monkeypatch.setattr(v, "abrir_ficha", abiertas.append)
+    codigo = servicios.clientes.obtener_ficha(admin, cliente).codigo
+    v.busqueda.setText(codigo)
+    assert v.buscar() is None and abiertas == [] and pedidas == [PARA_MODULO_CLIENTES]
+    respuesta[0] = True
+    assert v.buscar() == cliente and abiertas == [cliente] and len(pedidas) == 2
+    # Dentro del módulo Clientes ya desbloqueado no se vuelve a pedir.
+    v.ir_a("clientes")
+    assert v.pantalla_clientes.desbloquear()
+    antes = len(pedidas)
+    v.busqueda.setText(codigo)
+    assert v.buscar() == cliente and len(pedidas) == antes
+    v.close()
 
 
 def test_recepcion_activa_cliente_inactivo_con_clave_y_cobra_con_la_misma(
