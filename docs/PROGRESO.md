@@ -9,6 +9,21 @@
 - **Decisión del dueño (opción A):** quien ya ocupaba un casillero de la otra zona lo conserva; la lista de Casilleros pone la zona en rojo y hay un filtro de situación «Ocupado fuera de su zona» para cambiarlo cuando quieran.
 - `seed_datos.py` crea ahora los 411 casilleros con la distribución real.
 - Pruebas: `tests/test_zonas_casilleros.py` (bordes de los rangos, instalación nueva, migración sobre una base 0009, asignación por sexo y aviso fuera de zona).
+## Arreglo: la aplicación se congelaba al cambiar de módulo ✅ (27/11/2026)
+- **Síntoma (probando con los datos importados):** al pasar entre Pagos, Asistencia, Casilleros e Invitados la ventana dejaba de responder durante muchos segundos.
+- **Causa:** todas las tablas usaban el modo de Qt «ajustar columnas al contenido». En una tabla visible, cada celda que se escribe vuelve a medir hasta 1.000 filas de todas las columnas; al **volver a llenar** una tabla que ya tenía filas (lo que pasa cada vez que se regresa a un módulo) el costo se dispara: 300 filas × 9 columnas tardaban más de un minuto. No era la base de datos: las consultas tardan menos de 30 ms.
+- **Arreglo:** `ui/comunes.py` → la tabla (`Tabla`, creada con `tabla()`) usa columnas de ancho normal y hace **un solo ajuste al contenido** cuando termina el llenado. Además, ahora el usuario puede ensanchar una columna con el ratón. Las columnas que se estiran (p. ej. la lista de Recepción) no cambian.
+- **Medido** con `scripts/medir_pantallas.py` (nuevo) sobre el seed de 12.000 clientes y 411 casilleros, segunda vuelta por todos los módulos:
+
+  | Módulo | Antes | Ahora |
+  |---|---|---|
+  | Asistencia | 62 s | 55 ms |
+  | Casilleros | 56 s | 68 ms |
+  | Invitados | 26 s | 36 ms |
+  | Pagos | 25 s | 58 ms |
+  | Los demás | < 0,1 s | < 0,1 s |
+
+- Pruebas nuevas en `tests/test_ui_tablas.py` (la de rapidez se queda colgada con el código anterior).
 
 ## Pagos solo con clave, también para el administrador ✅ (27/11/2026)
 - Pedido del dueño: «que el menú de pagos solo se acceda con clave, que no sea visible a cualquiera». El módulo Pagos ahora arranca bloqueado para todos y pide usuario y clave de un administrador cada vez que se entra (`pedir_clave_siempre`); al salir se vuelve a bloquear.
