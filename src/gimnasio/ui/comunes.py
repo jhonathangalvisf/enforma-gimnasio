@@ -176,8 +176,14 @@ class AreaPantalla(QScrollArea):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # el foco sigue en la pantalla
         self.setWidget(pantalla)
-        pantalla.installEventFilter(self)
         self._ajustando = False
+        # Temporizador propio (y no QTimer.singleShot): se destruye junto con el área, así
+        # nunca llama a un área que ya se cerró.
+        self._pendiente = QTimer(self)
+        self._pendiente.setSingleShot(True)
+        self._pendiente.setInterval(0)
+        self._pendiente.timeout.connect(self.ajustar)
+        pantalla.installEventFilter(self)
 
     def ajustar(self) -> None:
         pantalla = self.widget()
@@ -206,7 +212,7 @@ class AreaPantalla(QScrollArea):
 
     def eventFilter(self, objeto, evento) -> bool:  # noqa: N802 (nombre de Qt)
         if objeto is self.widget() and evento.type() == QEvent.Type.LayoutRequest:
-            QTimer.singleShot(0, self.ajustar)
+            self._pendiente.start()
         return False
 
 
