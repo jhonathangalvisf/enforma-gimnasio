@@ -26,8 +26,14 @@ def test_pestana_probar_e_importar(qapp, servicios, admin, db3, monkeypatch):  #
     assert pantalla.pestanas.tabText(pantalla.pestanas.indexOf(pestana)) == "Importar datos"
     assert pestana.boton_importar.isEnabled() and not pestana.boton_informe.isEnabled()
 
-    pestana.campo_carpeta.setText(str(db3))
+    # El botón «Elegir carpeta…» va antes del campo, para que siempre se vea.
+    fila = pestana.layout().itemAt(1).layout()
+    assert fila.itemAt(0).widget() is pestana.boton_elegir
+    assert pestana.boton_elegir.text() == "Elegir carpeta…"
+
+    pestana.campo_carpeta.setText(f'"{db3}"')  # pegada con «Copiar como ruta»
     pestana.probar()
+    assert pestana.campo_carpeta.text() == str(db3)
     assert "Prueba (no se guardó nada)" in pestana.resumen.toPlainText()
     assert pestana.boton_informe.isEnabled() and pestana.boton_importar.isEnabled()
 

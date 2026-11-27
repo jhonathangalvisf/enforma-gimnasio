@@ -41,7 +41,7 @@ El último día del plan el cliente **todavía puede entrar** (le quedan 0 días
 
 Aparecen dos botones:
 
-- **Renovar ahora (F2):** abre la renovación de la membresía con el último plan del cliente ya elegido. Registre el pago (Recepción necesita la clave de un administrador) y, al guardar, el ingreso de ese momento pasa a "permitido". No aparece para clientes inactivos. Ver [Pagos y membresías](tema:pagos).
+- **Renovar ahora (F2):** abre la renovación de la membresía del cliente que está en la tarjeta, con su último plan ya elegido. Sirve para la tarjeta roja y también para pagar por adelantado a un cliente al día (la nueva membresía empieza el día siguiente al vencimiento). Registre el pago (Recepción necesita la clave de un administrador). Si el ingreso había sido negado, al guardar pasa a "permitido". No aparece para clientes inactivos; si pulsa F2 sin un cliente en la tarjeta, un aviso le dice qué hacer. Ver [Pagos y membresías](tema:pagos).
 - **Ingreso autorizado (F3):** deja entrar al cliente sin renovar. Pide el **usuario y la contraseña de un administrador** y, si quiere, un motivo (por ejemplo "paga mañana"). Queda en la auditoría a nombre del administrador que autorizó. Si un administrador tiene la sesión abierta, su usuario ya aparece escrito y solo pone la contraseña.
 
 Si la contraseña del administrador se escribe mal varias veces, ese usuario se bloquea igual que en el inicio de sesión.
@@ -71,7 +71,7 @@ Muestra los **últimos ingresos del día** y el **contador de asistentes de hoy*
 |---|---|
 | **Enter** | Registra el código escrito. Con el campo vacío confirma un segundo ingreso del día. |
 | **Esc** | Cancela el segundo ingreso o borra lo escrito. |
-| **F2** | Renovar ahora (tarjeta roja). |
+| **F2** | Renovar ahora (cliente de la tarjeta). |
 | **F3** | Ingreso autorizado (tarjeta roja). |
 | **F4** | Abre la ficha del cliente de la tarjeta. |
 | **F6** | Busca un cliente por documento, nombre o teléfono. |

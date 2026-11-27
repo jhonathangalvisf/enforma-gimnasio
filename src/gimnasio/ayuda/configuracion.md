@@ -65,7 +65,7 @@ Aquí se crean los planes que se venden. Cada plan tiene **nombre**, **duración
 - **Editar** (o doble clic): cambia nombre, duración o precio. Las membresías ya vendidas **no cambian**.
 - **Desactivar / Activar:** un plan desactivado deja de ofrecerse al renovar, pero las membresías que ya tienen ese plan siguen igual.
 
-Los planes **no se borran**. La primera vez el sistema trae de ejemplo Mensual (30 días), Quincenal (15), Trimestral (90) y Día (1), **sin precio y desactivados**: póngales el precio y actívelos antes de empezar a vender.
+Los planes **no se borran**. Si no hay ningún plan activo para vender, el sistema deja listos los planes del gimnasio: Mensual (30 días), Quincena (15), Semana (7), Trimestre (90), Semestre (180) y Año (365), **activos y con precio de $1** (en el recibo lo que importa es qué plan eligió el cliente). Puede cambiarles el precio cuando quiera. Un plan con precio $0 no se puede vender.
 
 ## Auditoría
 
@@ -84,7 +84,7 @@ Cada línea muestra la fecha y hora, quién lo hizo, la acción y el detalle (po
 
 Trae los datos del programa viejo del gimnasio (el de dBase, carpeta **DB3** con archivos `.DBF`). Solo el administrador lo ve. La carpeta original **no se modifica**: se copia a la carpeta de datos (`importaciones`) y se lee la copia.
 
-1. Pulse **Elegir carpeta…** y busque la carpeta **DB3** (la que tiene `ENCLIE.DBF`).
+1. Pulse **Elegir carpeta…** (a la izquierda del campo) y busque la carpeta **DB3** (la que tiene `ENCLIE.DBF`). También puede pegar su ruta en el campo, con o sin comillas (como la copia Windows con «Copiar como ruta»).
 2. Pulse **Probar sin guardar**. No se guarda nada; se crea un **informe en Excel** con el resumen y la hoja **Problemas** (fila por fila: qué estaba mal y qué se hizo). Ábralo con **Abrir informe en Excel**.
 3. Si está de acuerdo, pulse **Importar de verdad**. Antes se hace una **copia de seguridad** (configure primero la contraseña de las copias); si la copia falla, no se importa nada. Solo se puede importar **una vez**.
 

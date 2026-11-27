@@ -24,7 +24,7 @@ QMainWindow, QDialog {{ background: {GRIS_FONDO}; }}
 #usuarioActual {{ color: #dbe7f3; }}
 #busquedaGlobal {{
     background: white; border: 1px solid {AZUL_OSCURO}; border-radius: 4px;
-    padding: 6px 10px; min-width: 320px;
+    padding: 6px 10px; min-width: 180px;
 }}
 #barraSuperior QPushButton {{
     background: transparent; color: white; border: 1px solid #8fb0cf;

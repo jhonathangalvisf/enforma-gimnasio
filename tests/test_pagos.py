@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select, text
@@ -105,13 +105,64 @@ def test_planes_crud_y_permisos(servicios, admin, recepcion, fabrica):
     assert len(auditorias(fabrica, "plan_desactivado")) == 1
 
 
-def test_planes_de_ejemplo_solo_si_no_hay(servicios, admin):
-    assert servicios.planes.crear_planes_ejemplo() == 4
+def test_planes_del_gimnasio_solo_si_no_hay_activos(servicios, admin):
+    assert servicios.planes.crear_planes_ejemplo() == 6
     planes = servicios.planes.listar(admin)
     assert {p.nombre: p.duracion_dias for p in planes} == {
-        "Mensual": 30, "Quincenal": 15, "Trimestral": 90, "Día": 1}
-    assert all(not p.activo and p.precio == 0 for p in planes)
+        "Mensual": 30, "Quincena": 15, "Trimestre": 90, "Semestre": 180, "Año": 365,
+        "Semana": 7}
+    assert all(p.activo and p.precio == 1 for p in planes)  # precio simbólico
     assert servicios.planes.crear_planes_ejemplo() == 0
+
+
+def test_planes_del_gimnasio_con_solo_el_plan_del_programa_anterior(servicios, admin, fabrica):
+    """Instalación con datos importados: el plan «Programa anterior» (inactivo) no cuenta;
+    un plan viejo con el mismo nombre se activa en vez de duplicarse."""
+    from gimnasio.modelos import Plan
+
+    with fabrica() as s:
+        s.add_all([Plan(nombre="Programa anterior", duracion_dias=30, precio=0, activo=False),
+                   Plan(nombre="mensual", duracion_dias=30, precio=70_000, activo=False)])
+        s.commit()
+    assert servicios.planes.crear_planes_ejemplo() == 6
+    activos = {p.nombre: p.precio for p in servicios.planes.listar(admin, solo_activos=True)}
+    assert activos == {"mensual": 70_000, "Quincena": 1, "Trimestre": 1, "Semestre": 1,
+                       "Año": 1, "Semana": 1}
+
+
+def test_renovar_tras_membresia_del_programa_anterior_encadena(servicios, admin, fabrica, cliente,
+                                                               mensual):
+    """La membresía traída del programa anterior (plan inactivo, $0) sigue vigente: la
+    renovación empieza el día siguiente a su fin y el recibo muestra la nueva vigencia."""
+    from gimnasio.modelos import Membresia, Plan
+
+    hoy = servicios.pagos.hoy()
+    with fabrica() as s:
+        anterior = Plan(nombre="Programa anterior", duracion_dias=30, precio=0, activo=False)
+        s.add(anterior)
+        s.flush()
+        s.add(Membresia(cliente_id=cliente, plan_id=anterior.id, fecha_inicio=hoy - timedelta(7),
+                        fecha_fin=hoy + timedelta(22), precio_pactado=0, estado="activa",
+                        creado_por=admin.id, creado_en=datetime.now(timezone.utc)))
+        s.commit()
+    propuesta = servicios.pagos.proponer_membresia(admin, cliente)
+    assert propuesta.plan_id is None  # el plan del programa anterior no se vende
+    assert propuesta.fecha_inicio == hoy + timedelta(23)
+    m = servicios.pagos.registrar_membresia(admin, cliente, mensual.id,
+                                            fecha_inicio=propuesta.fecha_inicio,
+                                            pago=DatosPago(120_000, "efectivo"))
+    assert m.fecha_inicio == hoy + timedelta(23)
+    datos = servicios.pagos.datos_recibo(admin, m.pago.id)
+    assert (datos.vigencia_desde, datos.vigencia_hasta) == (m.fecha_inicio, m.fecha_fin)
+
+
+def test_recibo_de_otro_concepto_dice_la_vigencia_actual(servicios, admin, cliente, mensual):
+    m = servicios.pagos.registrar_membresia(admin, cliente, mensual.id,
+                                            pago=DatosPago(120_000, "efectivo"))
+    otro = servicios.pagos.registrar_pago(admin, cliente, DatosPago(5_000, "efectivo"),
+                                          concepto="otro")
+    datos = servicios.pagos.datos_recibo(admin, otro.id)
+    assert datos.vigencia_hasta is None and datos.vigente_hasta == m.fecha_fin
 
 
 def test_editar_plan_no_cambia_membresias_existentes(servicios, admin, mensual, cliente):
@@ -474,3 +525,31 @@ def test_recibo_de_mensualidad_muestra_datos_y_nueva_vigencia(
     otro = servicios.pagos.registrar_pago(recepcion, cliente, DatosPago(5_000), concepto="otro")
     assert servicios.pagos.datos_recibo(recepcion, otro.id).vigencia_hasta is None
 
+
+
+def test_recibo_de_10_cm_de_alto_solo_con_el_logo(servicios, admin, mensual, cliente,
+                                                  monkeypatch):
+    """El recibo mide 10 cm de alto, lleva el logo sin repetir el nombre del gimnasio y,
+    en un pago que no es mensualidad, dice hasta cuándo está al día el cliente."""
+    import re
+
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen.canvas import Canvas
+
+    m = servicios.pagos.registrar_membresia(admin, cliente, mensual.id, pago=DatosPago(120_000))
+    otro = servicios.pagos.registrar_pago(admin, cliente, DatosPago(5_000), concepto="otro")
+    assert servicios.configuracion.ruta_logo() is not None
+    escrito: list[str] = []
+    original = Canvas.drawString
+
+    def capturar(self, x, y, texto, *a, **k):
+        escrito.append(texto)
+        return original(self, x, y, texto, *a, **k)
+
+    monkeypatch.setattr(Canvas, "drawString", capturar)
+    for pago_id in (m.pago.id, otro.id):
+        pdf = servicios.pagos.generar_recibo(admin, pago_id).read_bytes()
+        caja = re.search(rb"/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]", pdf)
+        assert caja and abs(float(caja.group(2)) - 100 * mm) < 0.5
+    assert "Enforma" not in escrito
+    assert f"Hasta el {m.fecha_fin:%d/%m/%Y} (este pago no la cambia)" in escrito

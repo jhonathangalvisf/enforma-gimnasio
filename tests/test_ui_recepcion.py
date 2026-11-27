@@ -86,13 +86,43 @@ def test_lector_usb_tarjeta_verde_y_contador(qapp, pantalla, servicios, admin, p
     assert pantalla.contador.text() == "Hoy: 1 asistentes"
     assert pantalla.tabla.rowCount() == 1 and pantalla.tabla.item(0, 1).text() == c.codigo
     assert pantalla.sonar.veces == 0
-    assert pantalla.tarjeta.boton_renovar.isHidden() and pantalla.tarjeta.boton_autorizar.isHidden()
+    # Renovar se ofrece también al cliente al día (puede pagar por adelantado).
+    assert not pantalla.tarjeta.boton_renovar.isHidden()
+    assert pantalla.tarjeta.boton_autorizar.isHidden()
+
+
+def test_f2_renueva_por_adelantado_a_cliente_al_dia(qapp, pantalla, servicios, admin, plan,
+                                                     monkeypatch):
+    from gimnasio.ui.pagos import DialogoMembresia
+
+    c = nuevo_cliente(servicios, admin)
+    m = servicios.pagos.registrar_membresia(admin, c.id, plan.id,
+                                            pago=DatosPago(120_000, "efectivo"))
+    lector(qapp, pantalla, c.codigo)
+    pantalla.abrir = lambda ruta: None
+
+    def ejecutar(dialogo):
+        dialogo.guardar()
+        return dialogo.result()
+
+    monkeypatch.setattr(DialogoMembresia, "exec", ejecutar)
+    QTest.keyClick(pantalla.campo, Qt.Key.Key_F2)
+    nuevo_fin = m.fecha_fin + timedelta(30)
+    assert f"Vence el {nuevo_fin:%d/%m/%Y}" in pantalla.tarjeta.detalle.text()
+    assert servicios.asistencia.resumen_del_dia(admin).asistentes == 1  # sin otro ingreso
+    assert qapp.focusWidget() is pantalla.campo
+
+
+def test_f2_sin_cliente_explica_que_hacer(qapp, pantalla):
+    QTest.keyClick(pantalla.campo, Qt.Key.Key_F2)
+    assert "F2" in pantalla.tarjeta.aviso.text() and not pantalla.tarjeta.aviso.isHidden()
 
 
 def test_codigo_no_encontrado_suena(qapp, pantalla):
     lector(qapp, pantalla, "999999")
     assert pantalla.tarjeta.color == "rojo" and "NO ENCONTRADO" in pantalla.tarjeta.titulo.text()
     assert pantalla.sonar.veces == 1 and qapp.focusWidget() is pantalla.campo
+    assert pantalla.tarjeta.boton_renovar.isHidden()
 
 
 def test_amarillo_saldo_pendiente(qapp, pantalla, servicios, admin, plan):
