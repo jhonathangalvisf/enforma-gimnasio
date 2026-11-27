@@ -354,10 +354,18 @@ class DialogoFicha(QDialog):
 
     def _pestana_pagos(self, f: FichaCliente) -> QWidget:
         barra = QHBoxLayout()
-        self.boton_pago = boton("Registrar otro pago…")
-        self.boton_pago.setToolTip("El casillero se cobra en la pestaña Casillero, al asignarlo "
-                                   "o renovarlo.")
+        # La mensualidad se cobra renovando la membresía: así corre la vigencia.
+        self.boton_mensualidad = boton("Pagar mensualidad…", principal=True)
+        self.boton_mensualidad.setToolTip(
+            "Registra la nueva membresía y su pago: la vigencia se actualiza y sale en el recibo.")
+        self.boton_mensualidad.setEnabled(
+            self._actual.puede(Permiso.REGISTRAR_PAGOS) and f.activo)
+        self.boton_mensualidad.clicked.connect(self.renovar)
+        self.boton_pago = boton("Otro concepto (no es mensualidad)…")
+        self.boton_pago.setToolTip("Pagos que no cambian la vigencia. El casillero se cobra en "
+                                   "la pestaña Casillero, al asignarlo o renovarlo.")
         self.boton_recibo = boton("Ver / imprimir recibo")
+        barra.addWidget(self.boton_mensualidad)
         barra.addWidget(self.boton_pago)
         barra.addWidget(self.boton_recibo)
         self.boton_anular_pago = None

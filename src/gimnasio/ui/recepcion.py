@@ -138,6 +138,7 @@ class TarjetaRecepcion(QFrame):
         for w in (self.titulo, self.nombre, self.detalle, self.mensaje, self.extra,
                   self.alertas, self.aviso):
             w.setTextFormat(Qt.TextFormat.PlainText)
+            w.setWordWrap(True)  # en pantallas pequeñas el texto baja de renglón
             datos.addWidget(w)
         datos.addStretch()
         self.botones = QHBoxLayout()
@@ -258,8 +259,9 @@ class PantallaRecepcion(QWidget):
         self.ayuda = etiqueta(
             "Enter registra · F2 Renovar · F3 Autorizar · F4 Ficha · F6 Buscar por nombre "
             "o documento · F11 Pantalla completa · Ctrl + / Ctrl − letra", "textoSuave")
-        self.ayuda.setWordWrap(False)
-        encabezado.addWidget(self.ayuda)
+        self.ayuda.setWordWrap(True)
+        self.ayuda.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        encabezado.addWidget(self.ayuda, 1)
         capa.addLayout(encabezado)
 
         self.campo = QLineEdit()
@@ -272,7 +274,7 @@ class PantallaRecepcion(QWidget):
         cuerpo = QHBoxLayout()
         cuerpo.setSpacing(16)
         self.tarjeta = TarjetaRecepcion()
-        cuerpo.addWidget(self.tarjeta, 1)
+        cuerpo.addWidget(self.tarjeta, 3)
         lateral = QFrame()
         lateral.setObjectName("tarjeta")
         capa_lateral = QVBoxLayout(lateral)
@@ -290,8 +292,10 @@ class PantallaRecepcion(QWidget):
         cabecera.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         capa_lateral.addWidget(self.tabla, 1)
-        lateral.setFixedWidth(520)
-        cuerpo.addWidget(lateral)
+        # Ancho flexible: se angosta en pantallas pequeñas en vez de cortar la tarjeta.
+        lateral.setMinimumWidth(300)
+        lateral.setMaximumWidth(520)
+        cuerpo.addWidget(lateral, 2)
         capa.addLayout(cuerpo, 1)
 
         self.tarjeta.boton_renovar.clicked.connect(self.renovar)
@@ -405,7 +409,10 @@ class PantallaRecepcion(QWidget):
         self.tarjeta.mostrar(t, aviso, color)
         rechazado = r.estado == RECHAZADO
         self.tarjeta.mostrar_botones(
-            renovar=rechazado and t.activo and self._actual.puede(Permiso.REGISTRAR_PAGOS),
+            # Renovar se ofrece para cualquier cliente activo (también para pagar antes
+            # de que venza), no solo cuando se le niega el ingreso.
+            renovar=bool(t.cliente_id) and t.activo
+            and self._actual.puede(Permiso.REGISTRAR_PAGOS),
             autorizar=rechazado,
             ficha=self._actual.puede(Permiso.VER_CLIENTES),
         )
@@ -441,8 +448,10 @@ class PantallaRecepcion(QWidget):
         return self.ultimo
 
     def renovar(self) -> None:
-        r = self._rechazo_actual()
-        if r is None or not self.tarjeta.boton_renovar.isVisible():
+        r = self.ultimo
+        if r is None or self.tarjeta.boton_renovar.isHidden():
+            self._avisar("Primero digite o pase el código de un cliente activo; luego F2 "
+                         "renueva su membresía.")
             return
         from gimnasio.ui.pagos import DialogoMembresia
 
@@ -455,11 +464,19 @@ class PantallaRecepcion(QWidget):
         if self.abrir is not None:
             dialogo.abrir = self.abrir
         if dialogo.exec():
-            try:
-                self.mostrar(self._servicios.asistencia.confirmar_tras_renovar(
-                    self._actual, r.asistencia_id))
-            except ErrorNegocio as e:
-                mostrar_error(self, e)
+            if r.estado == RECHAZADO:
+                try:
+                    self.mostrar(self._servicios.asistencia.confirmar_tras_renovar(
+                        self._actual, r.asistencia_id))
+                except ErrorNegocio as e:
+                    mostrar_error(self, e)
+            else:
+                self.refrescar_tarjeta()  # la nueva vigencia queda a la vista
+        self.enfocar()
+
+    def _avisar(self, texto: str) -> None:
+        self.tarjeta.aviso.setText(texto)
+        self.tarjeta.aviso.show()
         self.enfocar()
 
     def autorizar(self) -> None:

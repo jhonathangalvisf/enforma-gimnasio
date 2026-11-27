@@ -65,7 +65,7 @@ Aquí se crean los planes que se venden. Cada plan tiene **nombre**, **duración
 - **Editar** (o doble clic): cambia nombre, duración o precio. Las membresías ya vendidas **no cambian**.
 - **Desactivar / Activar:** un plan desactivado deja de ofrecerse al renovar, pero las membresías que ya tienen ese plan siguen igual.
 
-Los planes **no se borran**. La primera vez el sistema trae de ejemplo Mensual (30 días), Quincenal (15), Trimestral (90) y Día (1), **sin precio y desactivados**: póngales el precio y actívelos antes de empezar a vender.
+Los planes **no se borran**. Si no hay ningún plan activo para vender, el sistema deja listos los planes del gimnasio: Mensual (30 días), Quincena (15), Semana (7), Trimestre (90), Semestre (180) y Año (365), **activos y con precio de $1** (en el recibo lo que importa es qué plan eligió el cliente). Puede cambiarles el precio cuando quiera. Un plan con precio $0 no se puede vender.
 
 ## Auditoría
 

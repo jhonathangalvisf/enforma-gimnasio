@@ -12,6 +12,7 @@ from gimnasio.servicios.backups import TIPO_AUTOMATICO, ErrorBackupNegocio, Resu
 from gimnasio.servicios.contenedor import Servicios
 from gimnasio.servicios.permisos import UsuarioActual
 from gimnasio.ui.backups import HiloBackup, ejecutar_con_espera
+from gimnasio.ui.comunes import FiltroAjusteDialogos
 from gimnasio.ui.dialogos import DialogoCambiarClave, DialogoLogin, DialogoPrimerAdministrador
 from gimnasio.ui.estilos import HOJA_ESTILOS
 from gimnasio.ui.ventana_principal import VentanaPrincipal
@@ -27,6 +28,9 @@ class Aplicacion:
         self.ventana: VentanaPrincipal | None = None
         app.setStyleSheet(HOJA_ESTILOS)
         app.setQuitOnLastWindowClosed(False)
+        # Diálogos que no caben (pantalla pequeña o escalado de Windows) se ajustan.
+        self._filtro_dialogos = FiltroAjusteDialogos()
+        app.installEventFilter(self._filtro_dialogos)
         self.hilo_backup: HiloBackup | None = None
         self.ultimo_resultado: ResultadoBackup | None = None
         self._temporizador_backup = QTimer()

@@ -23,11 +23,17 @@ from gimnasio.texto import normalizar
 DURACION_MAXIMA = 3660  # 10 años
 PRECIO_MAXIMO = 99_999_999
 
-# Se crean (inactivos y sin precio) solo si la base no tiene ningún plan. El
-# administrador pone el precio y los activa en Configuración → Planes.
+# Planes del gimnasio. Se crean activos y con precio simbólico de $1 cuando la base no
+# tiene ningún plan activo para vender: en el recibo importa qué plan eligió el cliente
+# (decisión del gimnasio). El precio se cambia en Configuración → Planes. Un plan con
+# precio $0 no se puede vender.
 PLANES_EJEMPLO: tuple[tuple[str, int], ...] = (
-    ("Mensual", 30), ("Quincenal", 15), ("Trimestral", 90), ("Día", 1),
+    ("Mensual", 30), ("Quincena", 15), ("Trimestre", 90), ("Semestre", 180),
+    ("Año", 365), ("Semana", 7),
 )
+PRECIO_PREDETERMINADO = 1
+# Plan de las membresías traídas del programa anterior (no se vende).
+PLAN_PROGRAMA_ANTERIOR = "Programa anterior"
 
 
 @dataclass(frozen=True)
@@ -140,21 +146,37 @@ class ServicioPlanes:
             sesion.commit()
 
     def crear_planes_ejemplo(self) -> int:
-        """Al arrancar: si no hay ningún plan, crea los de ejemplo inactivos y sin precio.
+        """Al arrancar: si no hay ningún plan activo para vender, deja listos los planes
+        del gimnasio (Mensual, Quincena, Trimestre, Semestre, Año y Semana): crea los que
+        falten y activa los que existan con ese nombre. Los que no tienen precio quedan
+        en $1 (el administrador lo cambia cuando quiera).
 
-        Devuelve cuántos creó (0 si ya había planes).
+        Devuelve cuántos creó o activó (0 si ya había planes activos).
         """
         with self._fabrica() as sesion:
-            if sesion.scalar(select(func.count(Plan.id))):
+            planes = list(sesion.scalars(select(Plan)))
+            vendibles = [p for p in planes
+                         if p.activo and normalizar(p.nombre) != normalizar(PLAN_PROGRAMA_ANTERIOR)]
+            if vendibles:
                 return 0
+            por_nombre = {normalizar(p.nombre): p for p in planes}
+            cambios = []
             for nombre, dias in PLANES_EJEMPLO:
-                sesion.add(Plan(nombre=nombre, duracion_dias=dias, precio=0, activo=False))
-            auditoria.registrar(
-                sesion, "planes_ejemplo_creados", "planes",
-                detalle={"planes": [n for n, _ in PLANES_EJEMPLO]},
-            )
+                existente = por_nombre.get(normalizar(nombre))
+                if existente is None:
+                    sesion.add(Plan(nombre=nombre, duracion_dias=dias, precio=PRECIO_PREDETERMINADO,
+                                    activo=True))
+                    cambios.append(nombre)
+                elif not existente.activo:
+                    existente.activo = True
+                    existente.precio = existente.precio or PRECIO_PREDETERMINADO
+                    cambios.append(existente.nombre)
+            if not cambios:
+                return 0
+            auditoria.registrar(sesion, "planes_ejemplo_creados", "planes",
+                                detalle={"planes": cambios})
             sesion.commit()
-            return len(PLANES_EJEMPLO)
+            return len(cambios)
 
     # --- apoyo ----------------------------------------------------------------
     @staticmethod

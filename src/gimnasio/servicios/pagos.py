@@ -215,6 +215,8 @@ class DatosRecibo:
     # Pagos de membresía: período que cubre (la nueva vigencia del cliente).
     vigencia_desde: date | None = None
     vigencia_hasta: date | None = None
+    # Otros pagos: hasta qué día está al día el cliente (no cambia con este pago).
+    vigente_hasta: date | None = None
     # Solo si el recibo tiene más de un concepto; `monto` es entonces el total.
     lineas: list[LineaRecibo] = field(default_factory=list)
 
@@ -713,6 +715,12 @@ class ServicioPagos:
                     )
                 )
                 saldo = max(0, precio - int(pagado))
+            vigente_hasta = None
+            if vigencia_hasta is None:
+                vigente_hasta = sesion.scalar(
+                    select(func.max(Membresia.fecha_fin)).where(
+                        Membresia.cliente_id == cliente.id, Membresia.estado == "activa")
+                )
             lineas = [
                 LineaRecibo(CONCEPTOS[p.concepto], self._detalle_pago(sesion, p), p.monto, p.anulado)
                 for p in pagos
@@ -741,7 +749,7 @@ class ServicioPagos:
                 usuario=usuario.nombre_completo if usuario else "—",
                 anulado=todos_anulados, motivo_anulacion=motivos if todos_anulados else "",
                 vigencia_desde=vigencia_desde, vigencia_hasta=vigencia_hasta,
-                lineas=extra,
+                vigente_hasta=vigente_hasta, lineas=extra,
             )
 
     @staticmethod

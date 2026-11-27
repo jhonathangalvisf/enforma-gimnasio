@@ -9,7 +9,7 @@ from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QVBoxLayout, QWidget,
 )
 
 from gimnasio import __version__
@@ -19,7 +19,7 @@ from gimnasio.servicios.sesion import ControlInactividad
 from gimnasio.servicios.errores import ErrorNegocio
 from gimnasio.ui.cliente_ficha import DialogoFicha
 from gimnasio.ui.clientes import DialogoElegirCliente, PantallaClientes
-from gimnasio.ui.comunes import boton, etiqueta, mostrar_error
+from gimnasio.ui.comunes import PilaPantallas, ajustar_a_pantalla, boton, etiqueta, mostrar_error
 from gimnasio.ui.configuracion import PantallaConfiguracion
 from gimnasio.ui.dialogos import DialogoCambiarClave
 from gimnasio.ui.asistencia import PantallaAsistencia
@@ -129,6 +129,7 @@ class VentanaPrincipal(QMainWindow):
         nombre = servicios.configuracion.obtener("gimnasio_nombre") or "Enforma"
         self.setWindowTitle(f"{nombre} — Gestión del gimnasio")
         self.resize(1280, 800)
+        ajustar_a_pantalla(self)  # en pantallas pequeñas no queda más grande que la pantalla
 
         central = QWidget()
         capa = QVBoxLayout(central)
@@ -144,7 +145,7 @@ class VentanaPrincipal(QMainWindow):
         self.navegacion = QListWidget()
         self.navegacion.setObjectName("navegacion")
         self.navegacion.setFixedWidth(210)
-        self.pantallas = QStackedWidget()
+        self.pantallas = PilaPantallas()
         cuerpo.addWidget(self.navegacion)
         cuerpo.addWidget(self.pantallas, 1)
         capa.addLayout(cuerpo, 1)
@@ -166,7 +167,7 @@ class VentanaPrincipal(QMainWindow):
             if not actual.puede(modulo.permiso):
                 continue  # los servicios igual validan el permiso
             pantalla = self._crear_pantalla(modulo)
-            self._indices[modulo.clave] = self.pantallas.addWidget(pantalla)
+            self._indices[modulo.clave] = self.pantallas.agregar(pantalla)
             item = QListWidgetItem(modulo.titulo)
             item.setData(Qt.ItemDataRole.UserRole, modulo.clave)
             self.navegacion.addItem(item)
