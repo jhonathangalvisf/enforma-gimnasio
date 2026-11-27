@@ -24,16 +24,20 @@ def _salir_con(resultado: int) -> None:
     if sys.platform == "win32" and "PySide6" in sys.modules:
         sys.stdout.flush()
         sys.stderr.flush()
-        os._exit(resultado)
+        # TerminateProcess y no os._exit: os._exit todavía descarga las DLL de Qt, y esa
+        # descarga puede fallar y cambiar el código de salida a 1 (visto en GitHub con
+        # «594 passed» y resultado 0 de pytest).
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.TerminateProcess(kernel32.GetCurrentProcess(), resultado)
+        os._exit(resultado)  # por si TerminateProcess no actuó
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_sessionfinish(session, exitstatus):
     # Envuelve a los demás: lo de después del `yield` corre cuando ya se imprimió el resumen.
     yield
-    import sys
-    print(f"\n[diagnóstico] fin de la sesión: exitstatus={session.exitstatus!r} "
-          f"testsfailed={session.testsfailed}", file=sys.__stderr__, flush=True)
     _salir_con(int(session.exitstatus))
 
 
