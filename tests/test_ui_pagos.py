@@ -142,6 +142,8 @@ def test_cierre_de_caja_recepcion_y_admin(qapp, servicios, admin, recepcion, pla
 
     caja_admin = PantallaPagos(servicios, admin, pedir=lambda *a: "Error")
     caja_admin.abrir = Abridor()
+    assert not caja_admin.desbloqueado  # también el administrador escribe la clave
+    assert caja_admin.desbloquear()
     assert caja_admin.totales["total"].text() == "$ 130.000"
     assert caja_admin.tabla_usuarios.rowCount() == 2
     fila = next(i for i in range(caja_admin.tabla.rowCount())

@@ -22,7 +22,7 @@ Aplicación de escritorio para Windows, de un solo puesto (1 PC), sin nube, para
 | Modificar clientes | ✔ (datos de contacto) | ✔ (todo) |
 | Activar / inactivar clientes | ✖ | ✔ |
 | Registrar pagos y membresías (incluido el cobro del casillero) | Con clave de administrador, cada vez | ✔ |
-| Módulo Pagos (su caja de hoy, consultas) | Con clave de administrador, cada vez que se abre | ✔ |
+| Módulo Pagos (su caja de hoy, consultas) y pestaña Pagos de la ficha | Con clave de administrador, cada vez que se abre | Con su clave, cada vez que se abre (que no quede a la vista) |
 | Anular pagos | ✖ | ✔ |
 | Eliminar asistencias | Solo las del día actual, con motivo | Cualquiera, con motivo |
 | Asignar casillero | ✔ | ✔ |
