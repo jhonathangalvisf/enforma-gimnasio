@@ -37,9 +37,12 @@ def medir(ruta_db: Path) -> list[tuple[str, float]]:
     from gimnasio.ui import pagos as pantalla_pagos
     from gimnasio.ui.ventana_principal import VentanaPrincipal
 
-    # Pagos pide la clave de un administrador al entrar: en la medición se da por escrita
-    # (sin la ventana modal, que dejaría el script esperando).
+    from gimnasio.ui import autorizacion
+
+    # Pagos y Clientes piden la clave de un administrador al entrar: en la medición se da
+    # por escrita (sin la ventana modal, que dejaría el script esperando).
     pantalla_pagos.pedir_clave_siempre = lambda *_a, **_k: (True, None)
+    autorizacion.PEDIR = lambda *_a, **_k: (True, None)
 
     resultados: list[tuple[str, float]] = []
     with tempfile.TemporaryDirectory() as carpeta:

@@ -53,9 +53,15 @@ def test_ventana_principal_cabe_en_un_portatil(qapp, servicios, admin):
 
 
 def test_recepcion_se_angosta(qapp, servicios, recepcion):
+    from PySide6.QtGui import QFontMetrics
+
     p = PantallaRecepcion(servicios, recepcion)
+    # En Windows sin pantalla (GitHub) la letra sale unas 2,5 veces más grande que en un
+    # PC real: el límite se escala con la letra («Exportar a Excel» mide 92 px a 9 pt).
+    ancho = QFontMetrics(QtWidgets.QApplication.font()).horizontalAdvance("Exportar a Excel")
+    escala = max(1.0, ancho / 92)
     # Junto al menú lateral (210 px) debe caber en 1093 px de ancho.
-    assert p.minimumSizeHint().width() <= 1093 - 210, p.minimumSizeHint()
+    assert p.minimumSizeHint().width() <= (1093 - 210) * escala, (p.minimumSizeHint(), escala)
 
 
 def test_dialogo_grande_se_ajusta_a_la_pantalla(qapp):
