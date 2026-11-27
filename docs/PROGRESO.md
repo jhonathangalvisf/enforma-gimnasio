@@ -1,5 +1,23 @@
 # Progreso
 
+## Asistencia: registrar por código y todo por cliente ✅ (27/11/2026)
+
+### Qué se hizo
+- La pantalla **Asistencia** ahora tiene tres pestañas: **Registrar ingreso**, **Historial del cliente** y **Reportes del cliente**.
+- **Registrar ingreso**: campo de código con la misma lógica y tarjeta de Recepción (semáforo verde/amarillo/rojo, aviso de ingreso duplicado con Enter/Esc, F2 Renovar, F3 Autorizar, F4 Ficha, F6 búsqueda por documento o nombre). Es una subclase de `PantallaRecepcion` (`PestanaIngreso`) que oculta el listado del día, para no duplicar código.
+- **Nada se carga al abrir**: se quitó la consulta automática; el historial y los reportes salen solo al pulsar Consultar/Generar (o Enter).
+- **Historial y reportes de un solo cliente**: piden el código (si falta, avisa). "Todo el historial" viene marcado; el administrador puede elegir Desde/Hasta. Exportar a Excel/PDF e imprimir siguen.
+- Se quitó el botón "Registrar ingreso manual…" que llevaba a Recepción (ahora la búsqueda F6 está en la misma pestaña).
+- Ayuda `ayuda/asistencia.md` reescrita para las tres pestañas.
+
+### Decisiones
+- "Por usuario" = por cada cliente (confirmado por el dueño).
+- Los reportes de todos los clientes (del día, rango, franja horaria, ranking, ausentes) salen de esta pantalla; siguen en el módulo **Reportes**.
+- Recepción puede generar el reporte de un cliente (antes solo el del día), siempre con todo su historial; es la misma información que ya podía consultar en el historial. El servicio lo valida (`ServicioAsistencia.reporte`).
+
+### Pendientes
+- Ninguno.
+
 ## Fase 10 — Importar datos del programa anterior ✅ (26/11/2026)
 
 ### Qué se encontró

@@ -223,13 +223,72 @@ def test_ficha_crea_y_resuelve_alertas(qapp, servicios, recepcion, admin, monkey
     assert servicios.alertas.activas(recepcion, c.id) == []
 
 
-def test_pantalla_asistencia_consulta_y_elimina(qapp, servicios, recepcion, admin, plan):
+def test_pantalla_asistencia_no_carga_nada_al_abrir(qapp, servicios, admin, plan):
     c = nuevo_cliente(servicios, admin)
     servicios.pagos.registrar_membresia(admin, c.id, plan.id, pago=DatosPago(120_000, "efectivo"))
-    servicios.asistencia.registrar_ingreso(recepcion, c.codigo)
+    servicios.asistencia.registrar_ingreso(admin, c.codigo)
+    p = PantallaAsistencia(servicios, admin)
+    p.show()
+    for i in range(p.pestanas.count()):
+        p.pestanas.setCurrentIndex(i)
+        qapp.processEvents()
+    assert [p.pestanas.tabText(i) for i in range(p.pestanas.count())] == [
+        "Registrar ingreso", "Historial del cliente", "Reportes del cliente"]
+    assert p.registros.tabla.rowCount() == 0
+    assert p.reportes.reporte_actual is None and p.reportes.tabla.rowCount() == 0
+    assert p.ingreso.tabla.parentWidget().isHidden()  # sin listado de ingresos del día
+    p.close()
+
+
+def test_asistencia_registra_ingreso_por_codigo(qapp, servicios, recepcion, admin, plan):
+    c = nuevo_cliente(servicios, admin)
+    servicios.pagos.registrar_membresia(admin, c.id, plan.id, pago=DatosPago(120_000, "efectivo"))
+    sin_plan = nuevo_cliente(servicios, admin, n=2)
+    p = PantallaAsistencia(servicios, recepcion)
+    ing = p.ingreso
+    ing.sonar = Sonido()
+    ing.campo.setText(c.codigo)
+    ing.procesar()
+    assert ing.ultimo.estado == "registrado" and ing.ultimo.tarjeta.permite_ingreso
+    assert ing.tabla.rowCount() == 0  # no se llena la lista del día
+    # Segundo ingreso del día: avisa y pide confirmación (Enter registra, Esc cancela).
+    ing.campo.setText(c.codigo)
+    ing.procesar()
+    assert ing.pendiente == c.id and "Ya ingresó hoy" in ing.tarjeta.aviso.text()
+    ing.cancelar()
+    assert ing.pendiente is None
+    assert servicios.asistencia.resumen_del_dia(recepcion).ingresos == 1
+    ing.campo.setText(c.codigo)
+    ing.procesar()
+    ing.procesar()  # Enter con el campo vacío confirma
+    assert servicios.asistencia.resumen_del_dia(recepcion).ingresos == 2
+    # Sin membresía: rojo, con sonido y botón Autorizar.
+    ing.campo.setText(sin_plan.codigo)
+    ing.procesar()
+    assert ing.ultimo.estado == "rechazado" and ing.sonar.veces == 1
+    assert not ing.tarjeta.boton_autorizar.isHidden()
+
+
+def test_historial_del_cliente_consulta_y_elimina(qapp, servicios, recepcion, admin, plan):
+    c = nuevo_cliente(servicios, admin)
+    otro = nuevo_cliente(servicios, admin, n=2)
+    for cliente in (c, otro):
+        servicios.pagos.registrar_membresia(admin, cliente.id, plan.id,
+                                            pago=DatosPago(120_000, "efectivo"))
+        servicios.asistencia.registrar_ingreso(recepcion, cliente.codigo)
     p = PantallaAsistencia(servicios, recepcion)
     reg = p.registros
-    assert not reg.desde.isEnabled() and reg.eliminadas.isHidden()
+    assert not reg.todo.isEnabled() and reg.eliminadas.isHidden()
+    errores = []
+    import gimnasio.ui.asistencia as modulo
+    original = modulo.mostrar_error
+    modulo.mostrar_error = lambda padre, e: errores.append(str(e))
+    try:
+        reg.consultar()  # sin código: pide el código, no lista a todos
+    finally:
+        modulo.mostrar_error = original
+    assert errores == ["Escriba el código del cliente."] and reg.tabla.rowCount() == 0
+    reg.codigo.setText(c.codigo)
     reg.consultar()
     assert reg.tabla.rowCount() == 1 and reg.tabla.item(0, 2).text() == c.codigo
     reg.tabla.selectRow(0)
@@ -238,28 +297,33 @@ def test_pantalla_asistencia_consulta_y_elimina(qapp, servicios, recepcion, admi
     assert reg.tabla.rowCount() == 0 and reg.total.text() == "0 registros"
 
 
-def test_pantalla_reportes_exporta_e_imprime(qapp, servicios, admin, plan, tmp_path):
+def test_reporte_del_cliente_exporta_e_imprime(qapp, servicios, admin, recepcion, plan, tmp_path):
     c = nuevo_cliente(servicios, admin)
-    servicios.pagos.registrar_membresia(admin, c.id, plan.id, pago=DatosPago(120_000, "efectivo"))
-    servicios.asistencia.registrar_ingreso(admin, c.codigo)
+    otro = nuevo_cliente(servicios, admin, n=2)
+    for cliente in (c, otro):
+        servicios.pagos.registrar_membresia(admin, cliente.id, plan.id,
+                                            pago=DatosPago(120_000, "efectivo"))
+        servicios.asistencia.registrar_ingreso(admin, cliente.codigo)
     p = PantallaAsistencia(servicios, admin)
     rep = p.reportes
-    rep.tipo.setCurrentIndex(rep.tipo.findData("ranking"))
-    assert rep.limite.isVisible() or not rep.limite.isHidden()
-    rep.generar()
-    assert rep.tabla.columnCount() == 6 and rep.tabla.item(0, 1).text() == c.codigo
-    rep.elegir_ruta = lambda sugerido, filtro: str(tmp_path / "ranking")
+    rep.codigo.setText(c.codigo)
+    r = rep.generar()
+    assert r.tipo == "cliente" and rep.tabla.rowCount() == 1
+    assert rep.tabla.item(0, 2).text() == c.codigo and "todo el historial" in r.subtitulo
+    rep.todo.setChecked(False)
+    assert rep.desde.isEnabled()
+    rep.elegir_ruta = lambda sugerido, filtro: str(tmp_path / "cliente")
     destino = rep.exportar("xlsx")
-    assert destino.name == "ranking.xlsx" and destino.exists()
+    assert destino.name == "cliente.xlsx" and destino.exists()
     abiertos = []
     rep.abrir = abiertos.append
-    rep.tipo.setCurrentIndex(rep.tipo.findData("dia"))
     assert rep.imprimir().suffix == ".pdf" and abiertos
-
-
-def test_recepcion_solo_ve_reporte_del_dia(qapp, servicios, recepcion):
-    p = PantallaAsistencia(servicios, recepcion)
-    assert [p.reportes.tipo.itemData(i) for i in range(p.reportes.tipo.count())] == ["dia"]
+    # Recepción también saca el reporte de un cliente (todo su historial).
+    pantalla_r = PantallaAsistencia(servicios, recepcion)
+    rep_r = pantalla_r.reportes
+    assert not rep_r.todo.isEnabled()
+    rep_r.codigo.setText(otro.codigo)
+    assert rep_r.generar().filas[0][2] == otro.codigo
 
 
 def test_ventana_principal_recepcion_enfocada_y_pantalla_completa(qapp, servicios, recepcion):

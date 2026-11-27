@@ -50,7 +50,7 @@ MODULOS: tuple[Modulo, ...] = (
     Modulo("clientes", "Clientes", Permiso.VER_CLIENTES,
            "Registro, consulta y modificación de clientes con búsqueda instantánea."),
     Modulo("asistencia", "Asistencia", Permiso.REGISTRAR_ASISTENCIA,
-           "Consulta, eliminación y reportes de asistencia."),
+           "Registro por código, historial y reportes de un cliente."),
     Modulo("casilleros", "Casilleros", Permiso.ASIGNAR_CASILLERO,
            "Asignación, renovación, liberación e historial de casilleros."),
     Modulo("invitados", "Invitados", Permiso.REGISTRAR_INVITADOS,
@@ -268,7 +268,7 @@ class VentanaPrincipal(QMainWindow):
             return self.pantalla_recepcion
         if modulo.clave == "asistencia":
             self.pantalla_asistencia = PantallaAsistencia(self._servicios, self.actual)
-            self.pantalla_asistencia.registrar_manual.connect(self.registro_manual)
+            self.pantalla_asistencia.abrir_ficha.connect(self.abrir_ficha)
             return self.pantalla_asistencia
         if modulo.clave == "casilleros":
             self.pantalla_casilleros = PantallaCasilleros(self._servicios, self.actual)
@@ -324,12 +324,6 @@ class VentanaPrincipal(QMainWindow):
             self.showMaximized()
         if self.pantalla_recepcion:
             self.pantalla_recepcion.enfocar()
-
-    def registro_manual(self) -> None:
-        """Desde Asistencia: va a Recepción y abre la búsqueda por documento o nombre."""
-        self.ir_a("recepcion")
-        if self.pantalla_recepcion:
-            self.pantalla_recepcion.buscar_manual()
 
     def enfocar_busqueda(self) -> None:
         self.busqueda.setFocus()

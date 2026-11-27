@@ -416,6 +416,17 @@ def test_reporte_del_dia_con_casillero(servicios, recepcion, admin, historial):
         admin, ParametrosReporte("dia", desde=HOY - timedelta(days=1))).filas) == 1
 
 
+def test_recepcion_reporte_de_un_cliente_solo_historial_completo(servicios, recepcion, historial):
+    a, *_ = historial
+    rep = servicios.asistencia.reporte(recepcion, ParametrosReporte("cliente", cliente_id=a.id))
+    assert rep.filas and {f[2] for f in rep.filas} == {a.codigo}
+    with pytest.raises(ErrorPermiso, match="todo el historial"):
+        servicios.asistencia.reporte(recepcion, ParametrosReporte(
+            "cliente", cliente_id=a.id, desde=HOY - timedelta(days=7), hasta=HOY))
+    with pytest.raises(ErrorValidacion):
+        servicios.asistencia.reporte(recepcion, ParametrosReporte("cliente"))
+
+
 def test_instantanea_del_casillero_no_cambia_al_liberar(servicios, admin, historial, fabrica,
                                                         reloj):
     a, *_ = historial

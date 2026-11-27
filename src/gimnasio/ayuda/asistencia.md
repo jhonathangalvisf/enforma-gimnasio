@@ -1,24 +1,32 @@
 # Asistencia
 
-Aquí se consultan los ingresos de los clientes, se corrigen los que se registraron por error y se sacan los reportes de asistencia. Los ingresos se registran en [Recepción](tema:recepcion).
+Aquí se registra el ingreso de **un cliente** por su código, se consulta su historial, se corrigen los ingresos que se registraron por error y se saca el reporte de asistencia de ese cliente.
 
-La pantalla tiene dos pestañas: **Registros** y **Reportes**.
+**Nada se carga solo al abrir la pantalla:** el historial y los reportes aparecen únicamente cuando usted los pide. Los reportes de **todos** los clientes (del día, por rango, franja horaria, ranking y clientes que no vienen) están en el módulo [Reportes](tema:reportes).
 
-## Pestaña Registros
+La pantalla tiene tres pestañas: **Registrar ingreso**, **Historial del cliente** y **Reportes del cliente**.
 
-Muestra los ingresos con fecha, hora, código, cliente, plan, resultado, casillero que tenía en ese momento, quién lo registró y estado.
+## Pestaña Registrar ingreso
 
-Filtros:
+Funciona igual que [Recepción](tema:recepcion):
 
-- **Desde / Hasta:** el periodo a consultar.
-- **Código del cliente** (opcional): solo los ingresos de ese cliente.
-- **Resultado:** "Solo ingresos" (los que entraron), "Ingresos y rechazos" o un resultado en particular (permitido, por vencer, vencido, inactivo, autorizado).
-- **Sexo** y **plan**.
+1. Escriba el **código del cliente** (o páselo con el lector) y presione **Enter**.
+2. Aparece la tarjeta con el semáforo: **verde** puede entrar, **amarillo** puede entrar con aviso (por vencer, saldo pendiente, alertas), **rojo** no puede entrar.
+3. Si el cliente **ya ingresó hoy**, se avisa: presione **Enter** para registrar otro ingreso o **Esc** para cancelar.
+
+Atajos: **F2** Renovar, **F3** Autorizar (clave del administrador), **F4** Ficha, **F6** Buscar por documento o nombre (también con el botón **Buscar por documento o nombre (F6)…**, para cuando el cliente no recuerda su código). **Ctrl +** y **Ctrl −** cambian el tamaño de la letra.
+
+Aquí no se muestra la lista de ingresos del día.
+
+## Pestaña Historial del cliente
+
+Escriba el **código del cliente** y pulse **Consultar** (o Enter). Se ven sus ingresos con fecha, hora, plan, resultado, casillero que tenía en ese momento, quién lo registró y estado.
+
+- **Todo el historial** viene marcado. El administrador puede desmarcarlo y elegir **Desde / Hasta**.
+- **Resultado:** "Solo ingresos" (los que entraron), "Ingresos y rechazos" o un resultado en particular.
 - **Ver eliminadas** (solo administrador).
 
-Pulse **Consultar** para ver los resultados.
-
-**Recepción** solo puede consultar el **día de hoy** o el **historial completo de un cliente** (escribiendo su código). El administrador consulta cualquier fecha.
+**Recepción** siempre ve el historial completo del cliente.
 
 ### Qué significa cada resultado
 
@@ -32,10 +40,6 @@ Pulse **Consultar** para ver los resultados.
 
 Los intentos rechazados quedan guardados para el historial, pero **no cuentan como asistencia** ni en los reportes.
 
-### Registrar un ingreso manual
-
-Pulse **Registrar ingreso manual (documento o nombre)…**. Lo lleva a Recepción con la búsqueda por documento o nombre abierta. Sirve cuando el cliente no recuerda su código.
-
 ### Eliminar un ingreso registrado por error
 
 1. Seleccione el registro en la tabla.
@@ -44,25 +48,16 @@ Pulse **Registrar ingreso manual (documento o nombre)…**. Lo lleva a Recepció
 
 El registro no se borra del todo: queda marcado como eliminado, con quién lo eliminó y por qué, y el administrador lo puede ver con **Ver eliminadas**. **Recepción** solo puede eliminar ingresos **de hoy**; el administrador, de cualquier día.
 
-## Pestaña Reportes
+## Pestaña Reportes del cliente
 
-Elija el tipo de reporte, ponga los filtros y pulse **Generar**. Luego puede **Exportar a Excel…**, **Exportar a PDF…** o **Imprimir**.
+Escriba el **código del cliente** y pulse **Generar** (o Enter). Por defecto sale **todo el historial**; el administrador puede desmarcarlo y elegir un periodo. Luego puede **Exportar a Excel…**, **Exportar a PDF…** o **Imprimir**.
 
-| Reporte | Qué muestra |
-|---|---|
-| Asistencia del día | Todos los ingresos de un día con el casillero de cada cliente. |
-| Asistencia por rango de fechas | Los ingresos de un periodo. |
-| Asistencia de un cliente | Los ingresos de un cliente en un periodo. |
-| Asistencia por franja horaria | Cuántos ingresos hubo en cada hora del día (hora de Colombia). Sirve para saber las horas pico. |
-| Ranking de asistencia | Los clientes que más vinieron en el periodo. |
-| Clientes que no vienen hace N días | Clientes activos que no han venido en los últimos N días, con su teléfono para llamarlos. |
-
-**Recepción** solo ve la **Asistencia del día** de hoy. Estos mismos reportes también están en el módulo [Reportes](tema:reportes).
+Los intentos rechazados y los registros eliminados no salen en el reporte.
 
 ## Preguntas frecuentes
 
 **Un cliente entró dos veces el mismo día, ¿cuenta doble?**
-En el contador de asistentes de hoy cuenta una sola persona. En la lista de registros aparecen los dos ingresos.
+En el contador de asistentes de hoy cuenta una sola persona. En su historial aparecen los dos ingresos.
 
 **¿Por qué cada ingreso guarda el casillero?**
 Para que los reportes viejos sigan mostrando qué casillero tenía el cliente ese día, aunque después lo haya cambiado o liberado.
