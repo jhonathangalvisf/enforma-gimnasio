@@ -28,8 +28,11 @@ def _salir_con(resultado: int) -> None:
         # descarga puede fallar y cambiar el código de salida a 1 (visto en GitHub con
         # «594 passed» y resultado 0 de pytest).
         import ctypes
+        from ctypes import wintypes
 
-        kernel32 = ctypes.windll.kernel32
+        kernel32 = ctypes.WinDLL("kernel32")
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
         kernel32.TerminateProcess(kernel32.GetCurrentProcess(), resultado)
         os._exit(resultado)  # por si TerminateProcess no actuó
 
