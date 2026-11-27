@@ -7,11 +7,13 @@ Aquí se manejan los casilleros: a quién se le asigna cada uno, hasta cuándo e
 - **Un cliente tiene como máximo un casillero**, y **un casillero tiene como máximo un cliente**. El sistema no deja asignar un segundo.
 - El casillero tiene **su propio vencimiento**, distinto al de la membresía. Por defecto cada pago cubre 30 días.
 - **Zonas:** los casilleros de la zona **hombres** son solo para hombres, los de **mujeres** solo para mujeres, y los **mixtos** para cualquiera. Al asignar, el sistema solo ofrece los casilleros de la zona que le corresponde al cliente.
+- **Distribución del gimnasio (1 al 411):** mujeres del 1 al 49 y del 276 al 294; hombres del 50 al 110, del 251 al 275 y del 307 al 328; el resto son mixtos. Así quedan al instalar y al importar el programa anterior. El administrador puede cambiar la zona de un casillero con **Editar…**.
+- Si alguien ya tenía un casillero de la otra zona, lo conserva: en la lista su zona sale **en rojo**. Con la situación **Ocupado fuera de su zona** se ven todos; use **Cambiar de casillero…** para pasarlo a uno de su zona.
 - Un casillero **nunca se libera solo**: el sistema sugiere cuáles liberar y una persona lo confirma.
 
 ## La pantalla Casilleros
 
-Arriba se ven los totales: **disponibles, ocupados, en mantenimiento, vencidos y sugeridos para liberar**. Debajo, la lista con filtros por estado, zona, sexo de quien lo ocupa y situación (casillero vencido, casillero por vencer, membresía del cliente vencida o sugerido liberar). Puede buscar por número de casillero, código o nombre del cliente.
+Arriba se ven los totales: **disponibles, ocupados, en mantenimiento, vencidos y sugeridos para liberar**. Debajo, la lista con filtros por estado, zona, sexo de quien lo ocupa y situación (casillero vencido, casillero por vencer, membresía del cliente vencida, sugerido liberar u ocupado fuera de su zona). Puede buscar por número de casillero, código o nombre del cliente.
 
 Haga **doble clic** sobre un casillero para asignarlo (si está libre) o renovarlo (si está ocupado).
 

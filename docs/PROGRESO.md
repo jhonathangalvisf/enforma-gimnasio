@@ -18,6 +18,31 @@
 ### Pendientes
 - Ninguno.
 
+## Zonas de los casilleros del gimnasio ✅ (27/11/2026)
+- Distribución pedida por el dueño (casilleros del 1 al 411): **mujeres** 1–49 y 276–294; **hombres** 50–110, 251–275 y 307–328; **mixtos** el resto (111–250, 295–306 y 329–411). Está en `servicios/zonas_casilleros.py` (68 de mujeres, 108 de hombres, 235 mixtos).
+- **Instalación nueva:** al arrancar, si la base no tiene casilleros, se crean los 411 (`001`–`411`) con su zona (`ServicioCasilleros.crear_catalogo_gimnasio`, auditado).
+- **Bases existentes:** la migración `0010` (solo datos) corrige una vez la zona de los casilleros 1–411 (sea «15» o «015»), crea los que falten y deja un registro en la auditoría. No libera a nadie ni cambia el estado (mantenimiento se respeta). Una base sin casilleros no se toca. Después, el administrador puede cambiar la zona de uno a mano.
+- **Importación del programa anterior:** la zona sale de la distribución del gimnasio; el campo SEX del ENCASI solo se usa para casilleros por encima del 411.
+- **Al asignar** se sigue bloqueando la zona que no corresponde al sexo del cliente (como antes).
+- **Decisión del dueño (opción A):** quien ya ocupaba un casillero de la otra zona lo conserva; la lista de Casilleros pone la zona en rojo y hay un filtro de situación «Ocupado fuera de su zona» para cambiarlo cuando quieran.
+- `seed_datos.py` crea ahora los 411 casilleros con la distribución real.
+- Pruebas: `tests/test_zonas_casilleros.py` (bordes de los rangos, instalación nueva, migración sobre una base 0009, asignación por sexo y aviso fuera de zona).
+## Arreglo: la aplicación se congelaba al cambiar de módulo ✅ (27/11/2026)
+- **Síntoma (probando con los datos importados):** al pasar entre Pagos, Asistencia, Casilleros e Invitados la ventana dejaba de responder durante muchos segundos.
+- **Causa:** todas las tablas usaban el modo de Qt «ajustar columnas al contenido». En una tabla visible, cada celda que se escribe vuelve a medir hasta 1.000 filas de todas las columnas; al **volver a llenar** una tabla que ya tenía filas (lo que pasa cada vez que se regresa a un módulo) el costo se dispara: 300 filas × 9 columnas tardaban más de un minuto. No era la base de datos: las consultas tardan menos de 30 ms.
+- **Arreglo:** `ui/comunes.py` → la tabla (`Tabla`, creada con `tabla()`) usa columnas de ancho normal y hace **un solo ajuste al contenido** cuando termina el llenado. Además, ahora el usuario puede ensanchar una columna con el ratón. Las columnas que se estiran (p. ej. la lista de Recepción) no cambian.
+- **Medido** con `scripts/medir_pantallas.py` (nuevo) sobre el seed de 12.000 clientes y 411 casilleros, segunda vuelta por todos los módulos:
+
+  | Módulo | Antes | Ahora |
+  |---|---|---|
+  | Asistencia | 62 s | 55 ms |
+  | Casilleros | 56 s | 68 ms |
+  | Invitados | 26 s | 36 ms |
+  | Pagos | 25 s | 58 ms |
+  | Los demás | < 0,1 s | < 0,1 s |
+
+- Pruebas nuevas en `tests/test_ui_tablas.py` (la de rapidez se queda colgada con el código anterior).
+
 ## Pagos solo con clave, también para el administrador ✅ (27/11/2026)
 - Pedido del dueño: «que el menú de pagos solo se acceda con clave, que no sea visible a cualquiera». El módulo Pagos ahora arranca bloqueado para todos y pide usuario y clave de un administrador cada vez que se entra (`pedir_clave_siempre`); al salir se vuelve a bloquear.
 - En la ficha del cliente, la pestaña Pagos muestra un candado hasta que se escribe la clave (vale mientras esa ficha esté abierta).

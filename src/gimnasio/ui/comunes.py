@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView, QDialog, QFrame, QHeaderView, QLabel, QMessageBox, QPushButton,
     QScrollArea, QStackedWidget, QTableWidget, QTableWidgetItem, QWidget,
@@ -47,8 +47,41 @@ def confirmar(padre: QWidget | None, titulo: str, texto: str) -> bool:
     return respuesta == QMessageBox.StandardButton.Yes
 
 
+class Tabla(QTableWidget):
+    """Tabla de solo lectura cuyas columnas se ajustan al contenido UNA vez por llenado.
+
+    Con el modo «ajustar al contenido» de Qt, cada celda que se escribe en una tabla
+    visible vuelve a medir hasta 1.000 filas de todas las columnas y a recalcular la
+    pantalla: llenar 300 pagos tomaba ~25 s y la aplicación parecía congelada al cambiar
+    de módulo. Aquí las columnas son de ancho normal (el usuario puede moverlas) y, al
+    cambiar el número de filas, se programa un solo ajuste para cuando termine el llenado.
+    """
+
+    def __init__(self, filas: int, columnas: int):
+        super().__init__(filas, columnas)
+        self._ajuste_pendiente = False
+
+    def setRowCount(self, filas: int) -> None:  # noqa: N802 (nombre de Qt)
+        super().setRowCount(filas)
+        if filas and not self._ajuste_pendiente:
+            self._ajuste_pendiente = True
+            QTimer.singleShot(0, self, self.ajustar_columnas)
+
+    def ajustar_columnas(self) -> None:
+        """Ancho de cada columna según su contenido (salvo las que se estiran)."""
+        self._ajuste_pendiente = False
+        cabecera = self.horizontalHeader()
+        ultima = self.columnCount() - 1
+        for columna in range(self.columnCount()):
+            if cabecera.sectionResizeMode(columna) != QHeaderView.ResizeMode.Interactive:
+                continue
+            if columna == ultima and cabecera.stretchLastSection():
+                continue
+            self.resizeColumnToContents(columna)
+
+
 def tabla(columnas: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(columnas))
+    t = Tabla(0, len(columnas))
     t.setHorizontalHeaderLabels(columnas)
     t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
     t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -56,7 +89,8 @@ def tabla(columnas: list[str]) -> QTableWidget:
     t.setAlternatingRowColors(True)
     t.verticalHeader().setVisible(False)
     t.horizontalHeader().setStretchLastSection(True)
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+    t.horizontalHeader().setMinimumSectionSize(40)
     t.setSortingEnabled(True)
     return t
 

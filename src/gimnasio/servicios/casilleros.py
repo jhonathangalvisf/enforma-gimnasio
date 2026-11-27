@@ -46,6 +46,9 @@ from gimnasio.servicios.pagos import (
 )
 from gimnasio.servicios.permisos import Permiso, UsuarioActual, exigir
 from gimnasio.servicios.sesion import Reloj, usuario_vigente
+from gimnasio.servicios.zonas_casilleros import (
+    TOTAL_CASILLEROS_GIMNASIO, zona_del_gimnasio,
+)
 
 ZONAS = {"hombres": "Hombres", "mujeres": "Mujeres", "mixto": "Mixto"}
 ESTADOS = {"disponible": "Disponible", "ocupado": "Ocupado", "mantenimiento": "En mantenimiento"}
@@ -82,6 +85,7 @@ SITUACIONES = {
     "por_vencer": "Casillero por vencer",
     "membresia_vencida": "Membresía del cliente vencida",
     "sugerido_liberar": "Sugerido liberar",
+    "fuera_de_zona": "Ocupado fuera de su zona",
 }
 
 
@@ -192,6 +196,13 @@ class FilaCasillero:
     @property
     def dias_vencido(self) -> int:
         return -self.dias if self.dias is not None and self.dias < 0 else 0
+
+    @property
+    def fuera_de_zona(self) -> bool:
+        """Ocupado por alguien cuyo sexo no corresponde a la zona (p. ej. un hombre en un
+        casillero de mujeres que ya lo tenía antes de definir las zonas). No se libera
+        solo: se avisa para que lo cambien."""
+        return self.ocupado and not zona_permitida(self.zona, self.sexo)
 
 
 @dataclass(frozen=True)
@@ -391,6 +402,24 @@ class ServicioCasilleros:
                 )
             sesion.commit()
             return nuevos
+
+    def crear_catalogo_gimnasio(self) -> int:
+        """Al arrancar: si no hay ningún casillero, crea los del gimnasio (001 al 411) con
+        su zona. Devuelve cuántos creó (0 si ya había casilleros)."""
+        with self._fabrica() as sesion:
+            if sesion.scalar(select(func.count(Casillero.id))):
+                return 0
+            sesion.add_all(
+                Casillero(numero=f"{n:03d}", zona=zona_del_gimnasio(n), estado="disponible")
+                for n in range(1, TOTAL_CASILLEROS_GIMNASIO + 1)
+            )
+            auditoria.registrar(
+                sesion, "casilleros_creados", "casilleros", momento=self._reloj(),
+                detalle={"desde": "001", "hasta": f"{TOTAL_CASILLEROS_GIMNASIO:03d}",
+                         "cantidad": TOTAL_CASILLEROS_GIMNASIO, "zona": "del gimnasio"},
+            )
+            sesion.commit()
+            return TOTAL_CASILLEROS_GIMNASIO
 
     def modificar(
         self, actual: UsuarioActual, casillero_id: int, numero: str, zona: str, notas: str = ""
@@ -1007,6 +1036,8 @@ class ServicioCasilleros:
         if s == "membresia_vencida" and not f.ocupado:
             return False
         if s == "sugerido_liberar" and not f.sugerir_liberar:
+            return False
+        if s == "fuera_de_zona" and not f.fuera_de_zona:
             return False
         if texto:
             numero = f.numero.lstrip("0") or "0"
