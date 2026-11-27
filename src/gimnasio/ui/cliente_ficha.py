@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel,
-    QLineEdit, QMessageBox, QTabWidget, QVBoxLayout, QWidget,
+    QLineEdit, QMessageBox, QStackedLayout, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha, fecha_hora_local, pesos
@@ -154,6 +154,8 @@ class DialogoFicha(QDialog):
         self._capa = QVBoxLayout(self)
         self._capa.setContentsMargins(24, 20, 24, 20)
         self._contenido: QWidget | None = None
+        # La pestaña Pagos se ve solo tras la clave de un administrador (una vez por ficha).
+        self.pagos_desbloqueados = False
         self.cargar()
 
     def cargar(self) -> None:
@@ -389,7 +391,39 @@ class DialogoFicha(QDialog):
             datos=[p.id for p in f.pagos], botones=barra,
         )
         self.tabla_pagos = getattr(pestana, "tabla", None)
-        return pestana
+        # Bloqueo: los pagos no quedan a la vista de cualquiera.
+        candado = QWidget()
+        capa = QVBoxLayout(candado)
+        capa.addStretch()
+        capa.addWidget(etiqueta("🔒 Los pagos del cliente se ven con la clave de un "
+                                "administrador.", "textoSuave"), 0, Qt.AlignmentFlag.AlignCenter)
+        self.boton_ver_pagos = boton("Ver pagos con clave de administrador…", principal=True)
+        self.boton_ver_pagos.clicked.connect(self.desbloquear_pagos)
+        capa.addWidget(self.boton_ver_pagos, 0, Qt.AlignmentFlag.AlignCenter)
+        capa.addStretch()
+        contenedor = QWidget()
+        self._pila_pagos = QStackedLayout(contenedor)
+        self._pila_pagos.addWidget(candado)
+        self._pila_pagos.addWidget(pestana)
+        self._pestana_pagos_real = pestana
+        if self.pagos_desbloqueados:
+            self._pila_pagos.setCurrentWidget(pestana)
+        return contenedor
+
+    def desbloquear_pagos(self) -> bool:
+        if not self.pagos_desbloqueados:
+            from gimnasio.servicios.autorizaciones import PARA_MODULO_PAGOS
+            from gimnasio.ui.autorizacion import pedir_clave_siempre
+
+            ok, autorizacion = pedir_clave_siempre(self, self._servicios, self._actual,
+                                                   PARA_MODULO_PAGOS)
+            # Solo sirve para mostrar la pestaña: cobrar pide su propia autorización.
+            self._servicios.autorizaciones.revocar(autorizacion)
+            if not ok:
+                return False
+            self.pagos_desbloqueados = True
+        self._pila_pagos.setCurrentWidget(self._pestana_pagos_real)
+        return True
 
     @staticmethod
     def _id_seleccionado(t) -> int | None:

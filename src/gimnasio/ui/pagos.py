@@ -25,10 +25,10 @@ from gimnasio.servicios.pagos import (
 )
 from gimnasio.servicios.permisos import Permiso, UsuarioActual
 from gimnasio.servicios.autorizaciones import (
-    PARA_MODULO_PAGOS, PARA_PAGO, Autorizacion, necesita_autorizacion,
+    PARA_MODULO_PAGOS, PARA_PAGO, Autorizacion,
 )
 from gimnasio.ui.autorizacion import (
-    asegurar_autorizacion, olvidar_autorizacion_si_falla, pedir_autorizacion,
+    asegurar_autorizacion, olvidar_autorizacion_si_falla, pedir_clave_siempre,
 )
 from gimnasio.ui.comunes import boton, celda, etiqueta, mostrar_error, tabla
 from gimnasio.ui.dialogos import _DialogoBase
@@ -400,8 +400,9 @@ class DialogoPago(_DialogoBase):
 class PantallaPagos(QWidget):
     """Cierre de caja diario por usuario y método. Recepción ve el suyo de hoy.
 
-    Para Recepción el módulo está bloqueado: cada vez que entra, un administrador debe
-    escribir su clave. Al salir de la pantalla se vuelve a bloquear."""
+    El módulo está bloqueado para todos (también para el administrador): cada vez que se
+    entra, un administrador debe escribir su usuario y clave. Al salir de la pantalla se
+    vuelve a bloquear."""
 
     COLUMNAS = ["Recibo", "Hora", "Cliente", "Concepto", "Método", "Referencia", "Monto",
                 "Usuario", "Estado"]
@@ -422,7 +423,7 @@ class PantallaPagos(QWidget):
         self.pestanas = QTabWidget()
         principal.addWidget(self.pestanas, 1)
         self.autorizacion: Autorizacion | None = None
-        self.desbloqueado = not necesita_autorizacion(actual)
+        self.desbloqueado = False
         self.panel_bloqueado = QWidget()
         bloqueo = QVBoxLayout(self.panel_bloqueado)
         bloqueo.addStretch()
@@ -534,8 +535,8 @@ class PantallaPagos(QWidget):
     def desbloquear(self) -> bool:
         if self.desbloqueado:
             return True
-        ok, autorizacion = pedir_autorizacion(self, self._servicios, self._actual,
-                                              PARA_MODULO_PAGOS)
+        ok, autorizacion = pedir_clave_siempre(self, self._servicios, self._actual,
+                                               PARA_MODULO_PAGOS)
         if not ok:
             return False
         self.autorizacion = autorizacion
@@ -546,9 +547,7 @@ class PantallaPagos(QWidget):
         return True
 
     def bloquear(self) -> None:
-        """Recepción: al salir del módulo se olvida la autorización."""
-        if not necesita_autorizacion(self._actual):
-            return
+        """Al salir del módulo se olvida la autorización y se vuelve a bloquear."""
         self._servicios.autorizaciones.revocar(self.autorizacion)
         self.autorizacion = None
         self.desbloqueado = False
