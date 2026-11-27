@@ -1,6 +1,6 @@
 # Recepción
 
-Recepción es la pantalla de la entrada del gimnasio. Sirve para registrar el ingreso de cada cliente con su **código personal** y para ver de inmediato si puede entrar. Es la primera pantalla que se abre y está pensada para usarse **solo con el teclado**.
+Recepción es la pantalla de la entrada del gimnasio. Sirve para registrar el ingreso de cada cliente con su **código personal** y para ver de inmediato si puede entrar. Es la primera pantalla que se abre y se puede usar **solo con el teclado** o con sus **botones grandes**.
 
 ## Registrar el ingreso de un cliente
 
@@ -11,6 +11,19 @@ Recepción es la pantalla de la entrada del gimnasio. Sirve para registrar el in
 
 El campo de código está **siempre seleccionado**: no hace falta hacer clic en él. Si más adelante se usa un lector USB, este escribe el código y presiona Enter por usted.
 
+## Los botones de arriba
+
+Debajo del campo de código hay botones grandes que hacen lo mismo que las teclas, por si prefiere el ratón:
+
+- **Registrar ingreso (Enter):** registra el código escrito.
+- **Buscar por nombre o cédula (F6):** para el cliente que no recuerda su código.
+- **Pantalla completa (F11):** oculta el menú y la barra.
+- **A− Letra / A+ Letra:** achica o agranda la letra de la pantalla.
+
+Pulsar un botón no saca el cursor del campo de código: puede seguir escribiendo el siguiente código enseguida.
+
+Arriba a la derecha está el **contador de asistentes de hoy** (cuenta personas distintas; si alguien entra dos veces cuenta una sola; los intentos rechazados no cuentan).
+
 ## Qué significan los colores
 
 La tarjeta siempre trae un **título y un ícono**, además del color, para que se entienda aunque no se distinga bien el color.
@@ -19,12 +32,12 @@ La tarjeta siempre trae un **título y un ícono**, además del color, para que 
 |---|---|---|---|
 | Verde | BIENVENIDO | La membresía está vigente. | Sí |
 | Amarillo | POR VENCER | Le quedan pocos días de plan (5 o menos por defecto). Dice "Tu plan vence el dd/mm/aaaa (faltan X días)". | Sí |
-| Amarillo | BIENVENIDO · SALDO PENDIENTE | Está vigente pero debe dinero de un abono. | Sí, recuérdele el saldo |
+| Amarillo | BIENVENIDO · SALDO PENDIENTE | Está vigente pero quedó debiendo dinero de antes (hoy ya no se reciben abonos). | Sí, recuérdele el saldo |
 | Amarillo | BIENVENIDO · CASILLERO VENCIDO | La membresía está bien, pero el casillero ya no está pagado. | Sí, ofrézcale renovar el casillero |
 | Rojo + sonido | MEMBRESÍA VENCIDA | Su plan ya terminó. | No, salvo que renueve o se autorice |
 | Rojo + sonido | SIN MEMBRESÍA | Nunca ha tenido un plan, o todos están anulados. | No, salvo que renueve o se autorice |
 | Rojo + sonido | SU PLAN AÚN NO INICIA | Pagó un plan que empieza en una fecha futura. | No, salvo que se autorice |
-| Rojo + sonido | CLIENTE INACTIVO | El administrador inactivó al cliente. | No, salvo que un administrador lo autorice |
+| Rojo + sonido | CLIENTE INACTIVO | El cliente está inactivo. | No, salvo que se active (F5) o un administrador lo autorice |
 
 El último día del plan el cliente **todavía puede entrar** (le quedan 0 días y la tarjeta sale amarilla).
 
@@ -39,10 +52,15 @@ El último día del plan el cliente **todavía puede entrar** (le quedan 0 días
 
 ## Cuando la tarjeta sale roja
 
-Aparecen dos botones:
+Según el caso aparecen estos botones:
 
 - **Renovar ahora (F2):** abre la renovación de la membresía del cliente que está en la tarjeta, con su último plan ya elegido. Sirve para la tarjeta roja y también para pagar por adelantado a un cliente al día (la nueva membresía empieza el día siguiente al vencimiento). Registre el pago (Recepción necesita la clave de un administrador). Si el ingreso había sido negado, al guardar pasa a "permitido". No aparece para clientes inactivos; si pulsa F2 sin un cliente en la tarjeta, un aviso le dice qué hacer. Ver [Pagos y membresías](tema:pagos).
 - **Ingreso autorizado (F3):** deja entrar al cliente sin renovar. Pide el **usuario y la contraseña de un administrador** y, si quiere, un motivo (por ejemplo "paga mañana"). Queda en la auditoría a nombre del administrador que autorizó. Si un administrador tiene la sesión abierta, su usuario ya aparece escrito y solo pone la contraseña.
+
+- **Activar cliente (F5):** solo aparece cuando la tarjeta dice **CLIENTE INACTIVO**. Pide la **clave de un administrador**, activa al cliente (conserva su mismo código) y abre enseguida **Renovar membresía** para cobrarle la mensualidad, sin volver a pedir la clave. Al guardar el pago, el ingreso pasa a "permitido". Si cancela el cobro, el cliente queda activo y puede cobrarle después con **F2**.
+- **Ver ficha (F4):** abre la ficha del cliente.
+
+Un cliente con **membresía vencida** sigue activo: para él se usa **Renovar ahora (F2)**, no Activar.
 
 Si la contraseña del administrador se escribe mal varias veces, ese usuario se bloquea igual que en el inicio de sesión.
 
@@ -61,9 +79,9 @@ Presione **F6** (buscar manual) y escriba el documento, el nombre, el apellido o
 
 Si escribe un código que no existe, la tarjeta dice que no se encontró y suena la alerta.
 
-## La lista de la derecha
+## ¿Dónde está la lista de ingresos de hoy?
 
-Muestra los **últimos ingresos del día** y el **contador de asistentes de hoy** (cuenta personas distintas; si alguien entra dos veces cuenta una sola). Los intentos rechazados quedan guardados pero no cuentan como asistentes.
+Recepción ya no muestra la lista al lado de la tarjeta, para que la tarjeta se vea grande. Los ingresos del día están en el módulo **Asistencia**.
 
 ## Atajos de teclado
 
@@ -74,6 +92,7 @@ Muestra los **últimos ingresos del día** y el **contador de asistentes de hoy*
 | **F2** | Renovar ahora (cliente de la tarjeta). |
 | **F3** | Ingreso autorizado (tarjeta roja). |
 | **F4** | Abre la ficha del cliente de la tarjeta. |
+| **F5** | Activar cliente (solo si la tarjeta dice CLIENTE INACTIVO). |
 | **F6** | Busca un cliente por documento, nombre o teléfono. |
 | **F11** | Pantalla completa: oculta el menú y la barra. Presione F11 otra vez para volver. |
 | **Ctrl +** / **Ctrl −** / **Ctrl 0** | Agranda, achica o deja normal la letra. El tamaño se recuerda en este computador. |

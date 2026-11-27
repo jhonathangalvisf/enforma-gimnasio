@@ -143,3 +143,16 @@ def recepcion(servicios, admin):
 
     return UsuarioActual(id=datos.id, usuario=datos.usuario,
                          nombre_completo=datos.nombre_completo, rol=datos.rol)
+
+
+def dejar_saldo_antiguo(fabrica, pago_id: int, monto: int, usuario_id: int | None = None) -> None:
+    """Simula un saldo que quedó de antes de quitar los abonos (27/11/2026): baja el
+    monto de un pago ya guardado. Hoy el sistema solo acepta pagos completos."""
+    from gimnasio.modelos import Pago
+
+    with fabrica() as s:
+        pago = s.get(Pago, pago_id)
+        pago.monto = monto
+        if usuario_id is not None:  # quién cobró ese pago antiguo
+            pago.usuario_id = usuario_id
+        s.commit()

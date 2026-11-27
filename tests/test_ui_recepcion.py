@@ -20,7 +20,8 @@ from gimnasio.ui.asistencia import PantallaAsistencia  # noqa: E402
 from gimnasio.ui.cliente_ficha import PESTANA_ALERTAS, DialogoAlerta, DialogoFicha  # noqa: E402
 from gimnasio.ui.recepcion import DialogoAutorizacion, PantallaRecepcion  # noqa: E402
 from gimnasio.ui.ventana_principal import VentanaPrincipal  # noqa: E402
-from tests.conftest import CLAVE_PRUEBA  # noqa: E402
+from gimnasio.db.engine import crear_fabrica_sesiones  # noqa: E402
+from tests.conftest import CLAVE_PRUEBA, dejar_saldo_antiguo  # noqa: E402
 
 HOY = date(2026, 11, 26)
 
@@ -84,7 +85,7 @@ def test_lector_usb_tarjeta_verde_y_contador(qapp, pantalla, servicios, admin, p
     assert pantalla.tarjeta.nombre.text() == "Carlos Pérez 1"
     assert pantalla.campo.text() == "" and qapp.focusWidget() is pantalla.campo
     assert pantalla.contador.text() == "Hoy: 1 asistentes"
-    assert pantalla.tabla.rowCount() == 1 and pantalla.tabla.item(0, 1).text() == c.codigo
+    assert not hasattr(pantalla, "tabla")  # sin lista lateral de ingresos (está en Asistencia)
     assert pantalla.sonar.veces == 0
     # Renovar se ofrece también al cliente al día (puede pagar por adelantado).
     assert not pantalla.tarjeta.boton_renovar.isHidden()
@@ -125,9 +126,11 @@ def test_codigo_no_encontrado_suena(qapp, pantalla):
     assert pantalla.tarjeta.boton_renovar.isHidden()
 
 
-def test_amarillo_saldo_pendiente(qapp, pantalla, servicios, admin, plan):
+def test_amarillo_saldo_pendiente(qapp, pantalla, servicios, admin, plan, motor):
     c = nuevo_cliente(servicios, admin)
-    servicios.pagos.registrar_membresia(admin, c.id, plan.id, pago=DatosPago(20_000, "efectivo"))
+    m = servicios.pagos.registrar_membresia(admin, c.id, plan.id,
+                                            pago=DatosPago(120_000, "efectivo"))
+    dejar_saldo_antiguo(crear_fabrica_sesiones(motor), m.pago.id, 20_000)
     lector(qapp, pantalla, str(int(c.codigo)))  # sin ceros a la izquierda
     assert pantalla.tarjeta.color == "amarillo"
     assert "$ 100.000" in pantalla.tarjeta.mensaje.text()
@@ -203,6 +206,7 @@ def test_inactivo_no_ofrece_renovar(qapp, pantalla, servicios, admin, plan):
     assert "INACTIVO" in pantalla.tarjeta.titulo.text()
     assert pantalla.tarjeta.boton_renovar.isHidden()
     assert not pantalla.tarjeta.boton_autorizar.isHidden()
+    assert not pantalla.tarjeta.boton_activar.isHidden()  # al lado de autorizar y ficha
 
 
 def test_alertas_y_cumpleanos_en_la_tarjeta(qapp, pantalla, servicios, admin, plan, recepcion):
@@ -219,7 +223,6 @@ def test_busqueda_manual_por_documento(qapp, pantalla, servicios, admin, plan):
     pantalla.buscar_manual(c.documento)
     assert pantalla.ultimo.tarjeta.cliente_id == c.id
     assert pantalla.contador.text() == "Hoy: 0 asistentes"  # sin membresía: rechazado
-    assert pantalla.tabla.rowCount() == 1
 
 
 def test_tamano_de_letra(qapp, pantalla):
@@ -306,3 +309,86 @@ def test_ventana_principal_recepcion_enfocada_y_pantalla_completa(qapp, servicio
     qapp.processEvents()
     assert qapp.focusWidget() is v.pantalla_recepcion.campo
     v.close()
+
+
+# --- botones grandes y botón Activar (27/11/2026) -------------------------------------------
+
+def test_botones_grandes_hacen_lo_mismo_que_las_teclas(qapp, pantalla, servicios, admin, plan,
+                                                       monkeypatch):
+    c = nuevo_cliente(servicios, admin)
+    servicios.pagos.registrar_membresia(admin, c.id, plan.id, pago=DatosPago(120_000, "efectivo"))
+    for b in (pantalla.boton_registrar, pantalla.boton_buscar, pantalla.boton_pantalla,
+              pantalla.boton_letra_mas, pantalla.boton_letra_menos):
+        assert b.focusPolicy() == Qt.FocusPolicy.NoFocus  # el lector sigue en el campo
+    # Registrar: lo que esté escrito en el campo, como Enter.
+    QTest.keyClicks(pantalla.campo, c.codigo)
+    pantalla.boton_registrar.click()
+    assert pantalla.tarjeta.color == "verde" and pantalla.contador.text() == "Hoy: 1 asistentes"
+    assert qapp.focusWidget() is pantalla.campo
+    # Buscar por nombre o cédula (F6).
+    monkeypatch.setattr(QtWidgets.QInputDialog, "getText",
+                        lambda *a, **k: (c.documento, True))
+    llamados = []
+    monkeypatch.setattr(pantalla, "registrar_cliente", lambda cid, confirmar=False:
+                        llamados.append(cid))
+    pantalla.boton_buscar.click()
+    assert llamados == [c.id]
+    # Pantalla completa (F11) y tamaño de letra.
+    señales = []
+    pantalla.pantalla_completa.connect(lambda: señales.append(1))
+    pantalla.boton_pantalla.click()
+    assert señales == [1]
+    pantalla.boton_letra_mas.click()
+    assert pantalla.escala == 1.1
+    pantalla.boton_letra_menos.click()
+    pantalla.boton_letra_menos.click()
+    assert pantalla.escala == 0.9
+
+
+def test_cliente_activo_no_muestra_activar(qapp, pantalla, servicios, admin, plan):
+    c = nuevo_cliente(servicios, admin)
+    lector(qapp, pantalla, c.codigo)  # sin membresía: rojo, pero está activo
+    assert pantalla.tarjeta.color == "rojo"
+    assert pantalla.tarjeta.boton_activar.isHidden()
+    assert not pantalla.tarjeta.boton_renovar.isHidden()
+
+
+def test_activar_cliente_inactivo_y_cobrar(qapp, pantalla, servicios, admin, plan, monkeypatch):
+    from gimnasio.ui.pagos import DialogoMembresia
+
+    c = nuevo_cliente(servicios, admin)
+    servicios.clientes.inactivar(admin, c.id, "Retiro")
+    lector(qapp, pantalla, c.codigo)
+    assert "INACTIVO" in pantalla.tarjeta.titulo.text()
+    pantalla.abrir = lambda ruta: None
+    abiertos = []
+
+    def ejecutar(dialogo):
+        abiertos.append(dialogo)
+        dialogo.guardar()
+        return dialogo.result()
+
+    monkeypatch.setattr(DialogoMembresia, "exec", ejecutar)
+    QTest.keyClick(pantalla.campo, Qt.Key.Key_F5)
+    assert servicios.clientes.obtener_ficha(admin, c.id).activo
+    assert len(abiertos) == 1 and abiertos[0].resultado.pago.monto == 120_000
+    # Activado y pagado: entra (el intento rechazado se confirma).
+    assert pantalla.tarjeta.color == "verde"
+    assert servicios.asistencia.resumen_del_dia(admin).asistentes == 1
+    assert pantalla.tarjeta.boton_activar.isHidden()
+    assert qapp.focusWidget() is pantalla.campo
+
+
+def test_activar_y_cancelar_el_cobro_deja_al_cliente_activo(qapp, pantalla, servicios, admin,
+                                                            plan, monkeypatch):
+    from gimnasio.ui.pagos import DialogoMembresia
+
+    c = nuevo_cliente(servicios, admin)
+    servicios.clientes.inactivar(admin, c.id, "Retiro")
+    lector(qapp, pantalla, c.codigo)
+    monkeypatch.setattr(DialogoMembresia, "exec", lambda dialogo: 0)
+    pantalla.tarjeta.boton_activar.click()
+    assert servicios.clientes.obtener_ficha(admin, c.id).activo
+    assert pantalla.tarjeta.boton_activar.isHidden()
+    assert not pantalla.tarjeta.boton_renovar.isHidden()  # puede cobrar después con F2
+    assert "activado" in pantalla.tarjeta.aviso.text()

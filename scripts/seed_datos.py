@@ -216,11 +216,8 @@ def generar(motor: Engine, n_clientes: int, semilla: int) -> dict[str, int]:
                 motivo_descuento="Descuento por referido" if descuento else None,
                 creado_por=1 if descuento else rnd.choice(ids_recepcion), creado_en=creado,
             ))
-            # Pago total o parcial (10 % queda con saldo pendiente).
+            # Siempre pago completo y anticipado (no hay abonos desde el 27/11/2026).
             montos = [precio_pactado]
-            if rnd.random() < 0.10:
-                abono = (precio_pactado // 2) // 1000 * 1000
-                montos = [abono] if rnd.random() < 0.5 else [abono, precio_pactado - abono]
             for k, monto in enumerate(montos):
                 consecutivo += 1
                 metodo = rnd.choices(["efectivo", "tarjeta", "transferencia"], [55, 20, 25])[0]

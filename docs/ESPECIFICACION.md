@@ -268,7 +268,7 @@ En SQLAlchemy los índices parciales se declaran con `Index(..., unique=True, sq
 3. **Asistencia duplicada en el mismo día:** por defecto se avisa y pide confirmación. ¿Se debe bloquear?
 4. **Invitados:** ¿se cobran? ¿hay límite por cliente al mes? ¿quién autoriza?
 5. **Planes:** ¿qué planes y precios existen hoy? ¿hay descuentos, congelamientos o pausas de membresía?
-6. **Pagos:** ¿se permiten abonos? ¿se necesita consecutivo de recibo y datos fiscales (NIT)? ¿se emite factura electrónica? (fuera de alcance por ahora)
+6. **Pagos:** ¿se permiten abonos? (27/11/2026: no, solo pago completo y anticipado) ¿se necesita consecutivo de recibo y datos fiscales (NIT)? ¿se emite factura electrónica? (fuera de alcance por ahora)
 7. **Cuántos usuarios** de recepción habrá (para crear las cuentas) y si hay más de un turno.
 8. **Datos a migrar:** ¿desde qué formato se pueden exportar? ¿hay historial de asistencias que se deba conservar?
 9. **Ayuda actual:** conviene copiar los textos de la ayuda del software actual como base.

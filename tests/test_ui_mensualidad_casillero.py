@@ -58,10 +58,7 @@ def test_renovar_membresia_con_casillero_en_un_recibo(qapp, servicios, recepcion
     d.guardar()
     assert "Elija el casillero" in d.error.text() and d.resultado is None
     elegir(d.casillero.campo_casillero, libres["M-2"])
-    d.sin_pago.setChecked(True)
-    d.guardar()
-    assert "pago de la mensualidad" in d.error.text()
-    d.sin_pago.setChecked(False)
+    assert d.pago.monto.value() == 120_000 and d.pago.monto.isReadOnly()  # pago completo
     d.guardar()
     assert d.resultado.pago.recibo == "R-000001" and d.resultado_casillero.numero == "M-2"
     assert [r.name for r in rutas] == ["R-000001.pdf"]
