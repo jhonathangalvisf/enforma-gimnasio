@@ -32,13 +32,17 @@ def cliente(servicios, admin):
 
 
 def test_ventana_principal_cabe_en_un_portatil(qapp, servicios, admin):
-    """Con todos los módulos (administrador), la ventana puede achicarse hasta caber en
-    1024 × 600: lo que no cabe en una pantalla se desplaza en lugar de quedar cortado."""
+    """Con todos los módulos (administrador), la ventana puede achicarse hasta caber en un
+    portátil: lo que no cabe en una pantalla se desplaza en lugar de quedar cortado."""
     v = VentanaPrincipal(servicios, admin)
     v.show()
     qapp.processEvents()
     minimo = v.minimumSizeHint()
-    assert minimo.width() <= 1024 and minimo.height() <= 600, minimo
+    # 1366 × 768 con escalado de Windows al 125 % deja 1093 × 614 (menos la barra de tareas).
+    partes = {nombre: getattr(v, nombre).minimumSizeHint().toTuple()
+              for nombre in ("barra_superior", "aviso_backup", "navegacion", "pantallas")}
+    partes["estado"] = v.statusBar().minimumSizeHint().toTuple()
+    assert minimo.width() <= 1093 and minimo.height() <= 560, (minimo, partes)
     for clave in v.modulos_visibles():
         v.ir_a(clave)
         assert not isinstance(v.pantallas.currentWidget(), QtWidgets.QScrollArea)
@@ -48,7 +52,8 @@ def test_ventana_principal_cabe_en_un_portatil(qapp, servicios, admin):
 
 def test_recepcion_se_angosta(qapp, servicios, recepcion):
     p = PantallaRecepcion(servicios, recepcion)
-    assert p.minimumSizeHint().width() <= 820
+    # Junto al menú lateral (210 px) debe caber en 1093 px de ancho.
+    assert p.minimumSizeHint().width() <= 1093 - 210, p.minimumSizeHint()
 
 
 def test_dialogo_grande_se_ajusta_a_la_pantalla(qapp):

@@ -214,7 +214,7 @@ class VentanaPrincipal(QMainWindow):
         self.etiqueta_usuario = etiqueta(
             f"{self.actual.nombre_completo} · {self.actual.nombre_rol}", "usuarioActual"
         )
-        self.etiqueta_usuario.setWordWrap(False)
+        self.etiqueta_usuario.setWordWrap(True)  # en pantallas angostas baja de renglón
         capa.addWidget(self.etiqueta_usuario)
         self.boton_clave = boton("Cambiar contraseña")
         self.boton_cerrar = boton("Cerrar sesión")

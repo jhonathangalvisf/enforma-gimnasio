@@ -18,7 +18,8 @@ from collections.abc import Callable
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QVBoxLayout, QWidget,
+    QApplication, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
+    QVBoxLayout, QWidget,
 )
 
 from gimnasio.formato import fecha, fecha_hora_local
@@ -122,7 +123,7 @@ class TarjetaRecepcion(QFrame):
         capa.setContentsMargins(24, 20, 24, 20)
         capa.setSpacing(24)
         self.foto = QLabel()
-        self.foto.setFixedSize(180, 220)
+        self.foto.setFixedSize(150, 185)
         self.foto.setAlignment(Qt.AlignmentFlag.AlignCenter)
         capa.addWidget(self.foto, 0, Qt.AlignmentFlag.AlignTop)
         datos = QVBoxLayout()
@@ -141,14 +142,15 @@ class TarjetaRecepcion(QFrame):
             w.setWordWrap(True)  # en pantallas pequeñas el texto baja de renglón
             datos.addWidget(w)
         datos.addStretch()
-        self.botones = QHBoxLayout()
+        # En cuadrícula de dos columnas: así la tarjeta cabe en pantallas angostas.
+        self.botones = QGridLayout()
         self.boton_renovar = boton("Renovar ahora (F2)", principal=True)
         self.boton_autorizar = boton("Ingreso autorizado (F3)")
         self.boton_ficha = boton("Ver ficha (F4)")
-        for b in (self.boton_renovar, self.boton_autorizar, self.boton_ficha):
+        for i, b in enumerate((self.boton_renovar, self.boton_autorizar, self.boton_ficha)):
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # el foco no sale del campo de código
-            self.botones.addWidget(b)
-        self.botones.addStretch()
+            self.botones.addWidget(b, i // 2, i % 2)
+        self.botones.setColumnStretch(2, 1)
         datos.addLayout(self.botones)
         capa.addLayout(datos, 1)
         self.limpiar()
@@ -293,7 +295,7 @@ class PantallaRecepcion(QWidget):
         self.tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         capa_lateral.addWidget(self.tabla, 1)
         # Ancho flexible: se angosta en pantallas pequeñas en vez de cortar la tarjeta.
-        lateral.setMinimumWidth(300)
+        lateral.setMinimumWidth(240)
         lateral.setMaximumWidth(520)
         cuerpo.addWidget(lateral, 2)
         capa.addLayout(cuerpo, 1)
