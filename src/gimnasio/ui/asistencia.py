@@ -107,16 +107,11 @@ class PestanaIngreso(PantallaRecepcion):
         titulo = self.findChild(QLabel, "tituloPantalla")
         if titulo is not None:
             titulo.hide()
-        self.tabla.parentWidget().hide()  # sin listado de ingresos
-        self.ayuda.setText(
-            "Escriba el código y presione Enter · F2 Renovar · F3 Autorizar · F4 Ficha · "
-            "F6 Buscar por nombre o documento · Ctrl + / Ctrl − letra")
-        abajo = QHBoxLayout()
-        abajo.addStretch()
-        self.boton_manual = boton("Buscar por documento o nombre (F6)…")
-        self.boton_manual.clicked.connect(lambda: self.buscar_manual())
-        abajo.addWidget(self.boton_manual)
-        self.layout().addLayout(abajo)
+        # Recepción ya no tiene listado lateral; aquí se ocultan además el contador y la
+        # pantalla completa. Quedan los botones grandes de Registrar, Buscar (F6) y letra.
+        self.contador.hide()
+        self.boton_pantalla.hide()
+        self.boton_manual = self.boton_buscar
 
     def actualizar_lista(self) -> None:
         """En Asistencia no se muestra el listado del día."""

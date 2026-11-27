@@ -17,6 +17,8 @@ from gimnasio.ui.cliente_ficha import PESTANA_MEMBRESIAS, PESTANA_PAGOS, Dialogo
 from gimnasio.ui.configuracion import DialogoPlan, PantallaConfiguracion  # noqa: E402
 from gimnasio.ui.pagos import DialogoMembresia, DialogoPago, PantallaPagos  # noqa: E402
 from gimnasio.ui.ventana_principal import VentanaPrincipal  # noqa: E402
+from gimnasio.db.engine import crear_fabrica_sesiones  # noqa: E402
+from tests.conftest import dejar_saldo_antiguo  # noqa: E402
 from tests.test_clientes import datos  # noqa: E402
 
 
@@ -43,24 +45,26 @@ class Abridor:
         self.rutas.append(ruta)
 
 
-def test_renovar_con_abono_y_recibo(qapp, servicios, recepcion, plan, cliente):
+def test_renovar_con_pago_completo_y_recibo(qapp, servicios, recepcion, plan, cliente):
     d = DialogoMembresia(servicios, recepcion, cliente)
     d.abrir = abridor = Abridor()
     assert d.campo_plan.currentData() == plan.id
     assert d.campo_precio.value() == 120_000 and not d.campo_precio.isEnabled()
     assert d.etiqueta_fin.text().startswith("25/12/2026")
-    d.pago.monto.setValue(50_000)
+    # Solo pago completo: el monto es el precio y no se puede cambiar.
+    assert d.pago.monto.value() == 120_000 and d.pago.monto.isReadOnly()
+    assert not hasattr(d, "sin_pago")
     d.pago.metodo.setCurrentIndex(d.pago.metodo.findData("tarjeta"))
     d.guardar()
     assert "referencia" in d.error.text() and d.resultado is None
     d.pago.referencia.setText("APR-1")
     d.guardar()
-    assert d.resultado.saldo == 70_000
+    assert d.resultado.saldo == 0 and d.resultado.pago.monto == 120_000
     assert abridor.rutas and abridor.rutas[0].name == "R-000001.pdf"
     # La siguiente renovación propone el día siguiente al vencimiento.
     d2 = DialogoMembresia(servicios, recepcion, cliente)
     assert d2.campo_inicio.date() == QDate(2026, 12, 26)
-    assert "70.000" in d2.avisos.text()
+    assert "saldo" not in d2.avisos.text()
 
 
 def test_admin_cambia_precio_con_motivo(qapp, servicios, admin, plan, cliente):
@@ -69,7 +73,7 @@ def test_admin_cambia_precio_con_motivo(qapp, servicios, admin, plan, cliente):
     assert d.campo_precio.isEnabled() and d.campo_motivo.isHidden()
     d.campo_precio.setValue(100_000)
     assert not d.campo_motivo.isHidden()
-    assert d.pago.monto.value() == 100_000  # el pago no supera el nuevo precio
+    assert d.pago.monto.value() == 100_000  # el pago sigue al nuevo precio (completo)
     d.guardar()
     assert "motivo" in d.error.text()
     d.campo_motivo.setText("Convenio empresa")
@@ -77,12 +81,10 @@ def test_admin_cambia_precio_con_motivo(qapp, servicios, admin, plan, cliente):
     assert d.resultado.precio_pactado == 100_000 and d.ruta_recibo is None
 
 
-def test_registrar_sin_pago(qapp, servicios, recepcion, plan, cliente):
-    d = DialogoMembresia(servicios, recepcion, cliente)
-    d.sin_pago.setChecked(True)
-    assert not d.pago.isEnabled()
-    d.guardar()
-    assert d.resultado.pago is None and d.resultado.saldo == 120_000
+def test_ficha_sin_saldo_no_ofrece_pagar_saldo(qapp, servicios, recepcion, plan, cliente):
+    servicios.pagos.registrar_membresia(recepcion, cliente, plan.id, pago=DatosPago(120_000))
+    f = DialogoFicha(servicios, recepcion, cliente)
+    assert f.boton_abono.isHidden()
 
 
 def test_dialogo_pago_suelto_es_otro_concepto(qapp, servicios, recepcion, cliente):
@@ -96,15 +98,18 @@ def test_dialogo_pago_suelto_es_otro_concepto(qapp, servicios, recepcion, client
     assert d.resultado.monto == 15_000 and d.resultado.saldo_despues is None
 
 
-def test_ficha_muestra_saldo_y_permite_abonar_y_anular(qapp, servicios, admin, recepcion, plan, cliente):
-    servicios.pagos.registrar_membresia(recepcion, cliente, plan.id, pago=DatosPago(20_000))
+def test_ficha_muestra_saldo_antiguo_y_permite_pagarlo_y_anular(qapp, servicios, admin, recepcion,
+                                                                 plan, cliente, motor):
+    m = servicios.pagos.registrar_membresia(recepcion, cliente, plan.id, pago=DatosPago(120_000))
+    dejar_saldo_antiguo(crear_fabrica_sesiones(motor), m.pago.id, 20_000)
     f = DialogoFicha(servicios, recepcion, cliente)
     f.abrir = Abridor()
     assert "100.000" in f.etiqueta_saldo.text()
     assert f.boton_anular_membresia is None and f.boton_anular_pago is None  # recepción
     assert f.tabla_membresias.item(0, 5).text() == "$ 100.000"
+    assert not f.boton_abono.isHidden() and "saldo" in f.boton_abono.text()
     abono = DialogoPago(servicios, recepcion, cliente, f.ficha.membresias[0])
-    assert abono.pago.monto.value() == 100_000
+    assert abono.pago.monto.value() == 100_000 and abono.pago.monto.isReadOnly()
     abono.abrir_recibo.setChecked(False)
     abono.guardar()
     f.cargar()

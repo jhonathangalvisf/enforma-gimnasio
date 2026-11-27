@@ -18,7 +18,7 @@ from gimnasio.servicios.asistencia import (
 from gimnasio.servicios.clientes import DatosCliente
 from gimnasio.servicios.errores import ErrorAutenticacion, ErrorPermiso, ErrorValidacion
 from gimnasio.servicios.pagos import DatosPago
-from tests.conftest import CLAVE_PRUEBA
+from tests.conftest import CLAVE_PRUEBA, dejar_saldo_antiguo
 
 HOY = date(2026, 11, 26)  # el reloj de prueba está en 26/11/2026 10:00 en Bogotá
 
@@ -117,9 +117,11 @@ def test_umbral_por_vencer_configurable(servicios, recepcion, admin, cliente, me
     assert servicios.asistencia.tarjeta(recepcion, cliente.id).color == AMARILLO
 
 
-def test_saldo_pendiente_entra_con_aviso_amarillo(servicios, recepcion, admin, cliente, mensual):
-    servicios.pagos.registrar_membresia(admin, cliente.id, mensual.id,
-                                        pago=DatosPago(50_000, "efectivo"))
+def test_saldo_pendiente_entra_con_aviso_amarillo(servicios, recepcion, admin, cliente, mensual,
+                                                  fabrica):
+    m = servicios.pagos.registrar_membresia(admin, cliente.id, mensual.id,
+                                            pago=DatosPago(120_000, "efectivo"))
+    dejar_saldo_antiguo(fabrica, m.pago.id, 50_000)  # saldo de antes de quitar los abonos
     r = servicios.asistencia.registrar_ingreso(recepcion, cliente.codigo)
     assert r.estado == REGISTRADO and r.tarjeta.resultado == "permitido"
     assert r.tarjeta.color == AMARILLO and "SALDO PENDIENTE" in r.tarjeta.titulo

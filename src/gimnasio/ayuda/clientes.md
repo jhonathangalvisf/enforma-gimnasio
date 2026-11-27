@@ -52,7 +52,7 @@ El formulario muestra el **código que sigue** en el consecutivo (por ejemplo 00
 
 **Código a mano (solo administrador):** el administrador puede borrar el código sugerido y escribir otro, por ejemplo 5000 para un cliente antiguo que ya tenía ese número. El consecutivo **no salta**: el siguiente cliente nuevo seguirá con 001001, y cuando el consecutivo llegue a un código ya usado lo salta solo. El consecutivo también se puede ajustar en [Configuración](tema:configuracion) → Parámetros → Clientes.
 
-**Un cliente, un código.** El documento no puede repetirse. Si inscribe a alguien cuya cédula ya está registrada, el sistema le recuerda su nombre y su **código antiguo** y abre su ficha. Si estaba inactivo, el administrador puede **reactivarlo** ahí mismo y conserva su código; Recepción debe pedírselo al administrador.
+**Un cliente, un código.** El documento no puede repetirse. Si inscribe a alguien cuya cédula ya está registrada, el sistema le recuerda su nombre y su **código antiguo** y abre su ficha. Si estaba inactivo, el administrador puede **reactivarlo** ahí mismo y conserva su código. En Recepción, al pasar su código sale **CLIENTE INACTIVO** con el botón **Activar cliente (F5)**, que pide la clave de un administrador y lleva a cobrar la mensualidad.
 
 Tipos de documento: CC y TI (solo números, de 5 a 11 dígitos), CE, Pasaporte y PPT.
 
@@ -64,7 +64,7 @@ Se abre con doble clic en la lista, con **Ver ficha**, con Ctrl+K o con F4 en Re
 |---|---|
 | **Datos** | Datos personales, foto y autorización de datos. |
 | **Contactos** | Teléfonos, correos y contacto de emergencia. |
-| **Membresías** | Todos sus planes con lo pagado y el saldo. Aquí se renueva (**Ctrl+R**) y se registran abonos. Ver [Pagos](tema:pagos). |
+| **Membresías** | Todos sus planes con lo pagado y el saldo. Aquí se renueva (**Ctrl+R**) y, si quedó un saldo de antes, se paga completo. Ver [Pagos](tema:pagos). |
 | **Pagos** | Todos sus pagos, con sus recibos. |
 | **Asistencias** | Sus ingresos al gimnasio. |
 | **Casillero** | El casillero que tiene y su historial. Ver [Casilleros](tema:casilleros). |

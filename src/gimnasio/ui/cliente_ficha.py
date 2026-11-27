@@ -324,7 +324,9 @@ class DialogoFicha(QDialog):
     def _pestana_membresias(self, f: FichaCliente) -> QWidget:
         barra = QHBoxLayout()
         self.boton_renovar = boton("Renovar membresía (Ctrl+R)", principal=True)
-        self.boton_abono = boton("Registrar abono…")
+        # Sin abonos: solo se ofrece pagar (completo) un saldo que quedó de antes.
+        self.boton_abono = boton("Pagar saldo pendiente…")
+        self.boton_abono.setVisible(any(m.saldo > 0 for m in f.membresias))
         barra.addWidget(self.boton_renovar)
         barra.addWidget(self.boton_abono)
         self.boton_anular_membresia = None
