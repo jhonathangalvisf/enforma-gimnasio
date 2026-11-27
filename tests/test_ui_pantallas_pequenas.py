@@ -42,6 +42,8 @@ def test_ventana_principal_cabe_en_un_portatil(qapp, servicios, admin):
     partes = {nombre: getattr(v, nombre).minimumSizeHint().toTuple()
               for nombre in ("barra_superior", "aviso_backup", "navegacion", "pantallas")}
     partes["estado"] = v.statusBar().minimumSizeHint().toTuple()
+    partes["en la barra"] = [(type(w).__name__, w.minimumSizeHint().width(), w.minimumWidth())
+                             for w in v.barra_superior.findChildren(QtWidgets.QWidget)]
     assert minimo.width() <= 1093 and minimo.height() <= 560, (minimo, partes)
     for clave in v.modulos_visibles():
         v.ir_a(clave)

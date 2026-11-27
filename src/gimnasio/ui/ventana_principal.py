@@ -209,12 +209,17 @@ class VentanaPrincipal(QMainWindow):
         self.busqueda.setObjectName("busquedaGlobal")
         self.busqueda.setPlaceholderText("Buscar cliente por código, nombre, documento, teléfono o correo  (Ctrl+K)")
         self.busqueda.returnPressed.connect(self.buscar)
+        # Mínimos explícitos: en pantallas angostas la barra se encoge en vez de empujar
+        # la ventana más allá del borde (el texto largo se ve completo al pasar el ratón).
+        self.busqueda.setMinimumWidth(150)
         capa.addWidget(self.busqueda, 1)
         capa.addSpacing(24)
         self.etiqueta_usuario = etiqueta(
             f"{self.actual.nombre_completo} · {self.actual.nombre_rol}", "usuarioActual"
         )
         self.etiqueta_usuario.setWordWrap(True)  # en pantallas angostas baja de renglón
+        self.etiqueta_usuario.setMinimumWidth(60)
+        self.etiqueta_usuario.setToolTip(self.etiqueta_usuario.text())
         capa.addWidget(self.etiqueta_usuario)
         self.boton_clave = boton("Cambiar contraseña")
         self.boton_cerrar = boton("Cerrar sesión")
